@@ -85,22 +85,22 @@ const semantic = {
     },
     layer: {
       layer_background_subtle: "#F7F7F8",
-      layer_background_wheel: "#FBE2BC",
+      layer_background_wheel: "#EAF3FF",
     },
     button: {
-      primary: "#D72630",
+      primary: "#0068FF",
     },
     component: {
       rule_note: {
-        bg_from: "#FFA744",
-        bg_to: "#FF8626",
+        bg_from: "#EAF3FF",
+        bg_to: "#D6E8FF",
       },
       voucher_card: {
-        bg_from: "#FFA13B",
-        bg_to: "#FF7B28",
-        btn_from: "#FFE998",
-        btn_to: "#FFC01A",
-        btn_text: "#D65726",
+        bg_from: "#1685FF",
+        bg_to: "#0068FF",
+        btn_from: "#FFFFFF",
+        btn_to: "#EAF3FF",
+        btn_text: "#0068FF",
       },
     },
   },

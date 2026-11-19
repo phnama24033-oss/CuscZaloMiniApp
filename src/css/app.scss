@@ -20,3 +20,63 @@
 .zaui-header::after {
   display: none;
 }
+
+.app-bottom-nav {
+  position: fixed;
+  z-index: 100;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+  box-shadow: 0 -4px 16px rgb(15 23 42 / 6%);
+}
+
+.app-bottom-nav__item {
+  display: flex;
+  min-height: 48px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.app-bottom-nav__item.is-active {
+  color: #0068ff;
+  font-weight: 700;
+}
+
+.app-bottom-nav__icon {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.wheel-pointer {
+  position: absolute;
+  z-index: 2;
+  top: -4px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-top: 30px solid #0068ff;
+  border-right: 15px solid transparent;
+  border-left: 15px solid transparent;
+  filter: drop-shadow(0 3px 3px rgb(15 23 42 / 25%));
+}
+
+.wheel-graphic {
+  display: block;
+  width: 100%;
+  overflow: visible;
+  border-radius: 50%;
+  filter: drop-shadow(0 5px 12px rgb(15 23 42 / 18%));
+}

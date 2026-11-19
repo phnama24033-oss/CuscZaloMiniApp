@@ -1,25 +1,29 @@
 import { getAccessToken, getPhoneNumber, getUserInfo } from "zmp-sdk/apis";
+import { apiRequest } from "@/services/api";
 
 export const userService = {
   async getUserName() {
     return (await getUserInfo()).userInfo.name;
   },
 
+  async getZaloUserId() {
+    return (await getUserInfo()).userInfo.id;
+  },
+
   // Zalo Mini App – Get Phone Number
   // Docs: https://miniapp.zaloplatforms.com/documents/api/getPhoneNumber/
   async getPhoneNumber() {
-    const access_token = await getAccessToken();
-    const code = await getPhoneNumber();
-    const secret_key = "your zalo app secret key";
-
-    const response = await fetch("https://graph.zalo.me/v2.0/me/info", {
-      headers: {
-        access_token,
-        code: code.token!,
-        secret_key,
-      },
+    const [accessToken, phoneCode] = await Promise.all([
+      getAccessToken(),
+      getPhoneNumber(),
+    ]);
+    if (!phoneCode.token) {
+      throw new Error("Zalo không trả về mã xác minh số điện thoại.");
+    }
+    const result = await apiRequest<{ phone: string }>("/api/zalo/phone", {
+      method: "POST",
+      body: JSON.stringify({ accessToken, code: phoneCode.token }),
     });
-    const data = await response.json();
-    return data.data.number;
+    return result.phone.replace(/^\+84/, "0");
   },
 };

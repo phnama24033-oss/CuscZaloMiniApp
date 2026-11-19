@@ -1,261 +1,297 @@
-import { PATHS } from "@/constants/path";
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "zmp-ui";
+import {
+  gameApi,
+  publicGameApi,
+  type SpinResult,
+  type WheelOption,
+} from "@/services/api";
+import { useEffect, useRef, useState } from "react";
+import { useSnackbar } from "zmp-ui";
 
-type SymbolId = "🍒" | "🍋" | "🔔" | "⭐" | "🧧";
-const SYMBOLS: SymbolId[] = ["🍒", "🍋", "🔔", "⭐", "🧧"];
+const COLORS = [
+  "#0068FF",
+  "#1685FF",
+  "#0755B8",
+  "#00A5FF",
+  "#1D4ED8",
+  "#3D8BFF",
+  "#0369A1",
+  "#2563EB",
+  "#0284C7",
+  "#1E40AF",
+  "#0EA5E9",
+  "#1D4ED8",
+];
 
-const REPEAT = 12;
-
-function makeStrip() {
-  const out: SymbolId[] = [];
-  for (let i = 0; i < REPEAT; i++) out.push(...SYMBOLS);
-  return out;
+function pointAt(angle: number, radius: number) {
+  const radians = (angle * Math.PI) / 180;
+  return {
+    x: 150 + radius * Math.cos(radians),
+    y: 150 + radius * Math.sin(radians),
+  };
 }
 
-function ReelLoop({
-  strip,
+function sectorPath(index: number, count: number) {
+  const startAngle = -90 + (index * 360) / count;
+  const endAngle = -90 + ((index + 1) * 360) / count;
+  const start = pointAt(startAngle, 140);
+  const end = pointAt(endAngle, 140);
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M 150 150 L ${start.x} ${start.y} A 140 140 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+}
+
+function WheelGraphic({
+  slots,
+  rotation,
   spinning,
-  stopAtIndex,
-  stopSignal,
-  hasSpun,
-  durationMs,
-  delayMs,
-  onDone,
 }: {
-  strip: SymbolId[];
+  slots: WheelOption[];
+  rotation: number;
   spinning: boolean;
-  stopAtIndex: number;
-  stopSignal: number;
-  hasSpun: boolean;
-  durationMs: number;
-  delayMs: number;
-  onDone?: () => void;
 }) {
-  const stripRef = React.useRef<HTMLDivElement | null>(null);
-
-  const ITEM_H = 72;
-  const SPEED = 1400;
-  const stripHeight = strip.length * ITEM_H;
-
-  const yRef = React.useRef(0);
-  const rafRef = React.useRef<number | null>(null);
-  const lastTsRef = React.useRef<number | null>(null);
-  const spinningRef = React.useRef(false);
-
-  const setTransform = (y: number) => {
-    const el = stripRef.current;
-    if (!el) return;
-    el.style.transform = `translateY(-${y}px)`;
-  };
-
-  const setTransition = (value: string) => {
-    const el = stripRef.current;
-    if (!el) return;
-    el.style.transition = value;
-  };
-
-  React.useEffect(() => {
-    spinningRef.current = spinning;
-
-    if (!spinning) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      lastTsRef.current = null;
-      return;
-    }
-
-    setTransition("none");
-
-    const tick = (ts: number) => {
-      if (!spinningRef.current) return;
-
-      if (lastTsRef.current == null) lastTsRef.current = ts;
-      const dt = (ts - lastTsRef.current) / 1000;
-      lastTsRef.current = ts;
-
-      yRef.current = (yRef.current + SPEED * dt) % stripHeight;
-      setTransform(yRef.current);
-
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      lastTsRef.current = null;
-    };
-  }, [spinning, stripHeight]);
-
-  React.useEffect(() => {
-    if (!hasSpun) return;
-    if (spinning) return;
-
-    const t = window.setTimeout(() => {
-      const total = SYMBOLS.length;
-      const baseOffset = strip.length - total;
-      const targetIndex = baseOffset + stopAtIndex;
-      const targetY = (targetIndex * ITEM_H) % stripHeight;
-
-      const current = yRef.current % stripHeight;
-
-      let nextTarget = targetY;
-      if (nextTarget < current) nextTarget += stripHeight;
-
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      spinningRef.current = false;
-
-      setTransition(
-        `transform ${durationMs}ms cubic-bezier(0.12, 0.8, 0.2, 1)`
-      );
-      setTransform(nextTarget);
-
-      const end = window.setTimeout(() => {
-        setTransition("none");
-        yRef.current = targetY;
-        setTransform(yRef.current);
-        onDone?.();
-      }, durationMs + 30);
-
-      return () => window.clearTimeout(end);
-    }, delayMs);
-
-    return () => window.clearTimeout(t);
-  }, [
-    hasSpun,
-    stopSignal,
-    spinning,
-    stopAtIndex,
-    delayMs,
-    durationMs,
-    strip.length,
-    stripHeight,
-  ]);
+  const segmentAngle = 360 / slots.length;
 
   return (
-    <div
-      className="relative overflow-hidden rounded-2xl flex justify-center pt-1"
-      style={{ width: 44, height: ITEM_H + 2 }}
-    >
-      <div ref={stripRef}>
-        {strip.map((s, i) => (
-          <div
-            key={i}
-            className="grid place-items-center"
-            style={{ height: ITEM_H }}
-          >
-            <span className="text-4xl leading-none">{s}</span>
-          </div>
-        ))}
-      </div>
+    <div className="relative mx-auto w-full max-w-[340px]">
+      <div className="wheel-pointer" aria-hidden="true" />
+      <svg
+        viewBox="0 0 300 300"
+        role="img"
+        aria-label={`Vòng quay gồm ${slots.length} ô`}
+        className="wheel-graphic"
+        style={{
+          transform: `rotate(${rotation}deg)`,
+          transition: spinning
+            ? "transform 5s cubic-bezier(0.12, 0.72, 0.12, 1)"
+            : "none",
+        }}
+      >
+        <circle cx="150" cy="150" r="147" fill="#ffffff" />
+        <g>
+          {slots.map((slot, index) => {
+            const middleAngle = -90 + (index + 0.5) * segmentAngle;
+            return (
+              <g key={slot.id}>
+                <path
+                  d={sectorPath(index, slots.length)}
+                  fill={COLORS[index % COLORS.length]}
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                />
+                <g transform={`rotate(${middleAngle + 90} 150 150)`}>
+                  <text
+                    x="150"
+                    y="62"
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize={slots.length > 8 ? 12 : 15}
+                    fontWeight="800"
+                  >
+                    {index + 1}
+                  </text>
+                  <text
+                    x="150"
+                    y="80"
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize={slots.length > 8 ? 8 : 10}
+                    fontWeight="600"
+                  >
+                    {slot.label.length > 18
+                      ? `${slot.label.slice(0, 17)}…`
+                      : slot.label}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </g>
+        <circle
+          cx="150"
+          cy="150"
+          r="24"
+          fill="#ffffff"
+          stroke="#dbeafe"
+          strokeWidth="5"
+        />
+        <text
+          x="150"
+          y="154"
+          textAnchor="middle"
+          fill="#0068ff"
+          fontSize="9"
+          fontWeight="800"
+        >
+          QUAY
+        </text>
+      </svg>
     </div>
   );
 }
 
 export default function SlotMachine() {
-  const strip = useMemo(() => makeStrip(), []);
+  const [slots, setSlots] = useState<WheelOption[]>([]);
+  const [loading, setLoading] = useState(true);
   const [spinning, setSpinning] = useState(false);
-  const [stopSignal, setStopSignal] = useState(0);
-  const [result, setResult] = useState<[number, number, number]>([0, 0, 0]);
+  const [checkingSpin, setCheckingSpin] = useState(true);
+  const [spinUsed, setSpinUsed] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [outcome, setOutcome] = useState<SpinResult | null>(null);
+  const currentRotation = useRef(0);
+  const { openSnackbar } = useSnackbar();
 
-  const [doneCount, setDoneCount] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
-  const [hasSpun, setHasSpun] = useState(false);
-  const navigate = useNavigate();
+  useEffect(() => {
+    let active = true;
+    publicGameApi
+      .wheel()
+      .then((wheel) => {
+        if (active) setSlots(wheel);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        openSnackbar({
+          icon: true,
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Không thể tải cấu hình vòng quay.",
+          duration: 5000,
+        });
+      })
+      .then(() => {
+        if (active) setLoading(false);
+      }, () => {
+        if (active) setLoading(false);
+      });
 
-  const spin = () => {
-    if (isAnimating || isClaiming) return;
+    return () => {
+      active = false;
+    };
+  }, []);
 
-    setDoneCount(0);
-    setIsAnimating(true);
-    setIsClaiming(false);
-    setHasSpun(true);
+  useEffect(() => {
+    let active = true;
+    gameApi
+      .status()
+      .then((status) => {
+        if (active && status) setSpinUsed(status.used);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        openSnackbar({
+          icon: true,
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Không thể kiểm tra lượt quay.",
+          duration: 5000,
+        });
+      })
+      .then(() => {
+        if (active) setCheckingSpin(false);
+      }, () => {
+        if (active) setCheckingSpin(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const spin = async () => {
+    if (spinning || spinUsed || checkingSpin || loading || slots.length < 2)
+      return;
     setSpinning(true);
+    setOutcome(null);
+    sessionStorage.removeItem("zaui-lucky-wheel-latest-prize");
 
-    // TODO:
-    // Thực hiện thay thế kết quả Vòng quay may mắn tại đây thông qua việc gọi API
-    // Hiện đang giả lập ngẫu nhiên, và bắt đầu quay sau 1500ms
-    const r: [number, number, number] = [
-      Math.floor(Math.random() * SYMBOLS.length),
-      Math.floor(Math.random() * SYMBOLS.length),
-      Math.floor(Math.random() * SYMBOLS.length),
-    ];
-    setResult(r);
+    try {
+      const result = await gameApi.spin();
+      setSpinUsed(true);
+      const nextSlots = result.wheel;
+      if (nextSlots.length < 2 || result.slotIndex >= nextSlots.length) {
+        throw new Error("Cấu hình vòng quay từ máy chủ không hợp lệ.");
+      }
 
-    window.setTimeout(() => {
+      setSlots(nextSlots);
+      const segmentAngle = 360 / nextSlots.length;
+      const targetAngle =
+        (360 - (result.slotIndex + 0.5) * segmentAngle) % 360;
+      const remaining =
+        (targetAngle - (currentRotation.current % 360) + 360) % 360;
+      currentRotation.current += 360 * 5 + remaining;
+      setRotation(currentRotation.current);
+      setOutcome(result);
+      if (result.reward) {
+        sessionStorage.setItem("zaui-lucky-wheel-latest-prize", result.reward);
+      }
+
+      window.setTimeout(() => setSpinning(false), 5100);
+    } catch (error) {
       setSpinning(false);
-      setStopSignal((x) => x + 1);
-    }, 2000);
-  };
-
-  const onDone = () => {
-    setDoneCount((count) => count + 1);
-  };
-
-  useEffect(() => {
-    if (doneCount === 3) {
-      setIsAnimating(false);
-      setIsClaiming(true);
+      if (error instanceof Error && error.message.includes("lượt quay duy nhất")) {
+        setSpinUsed(true);
+      }
+      openSnackbar({
+        icon: true,
+        type: "error",
+        text:
+          error instanceof Error ? error.message : "Không thể quay thưởng.",
+        duration: 5000,
+      });
     }
-  }, [doneCount]);
-
-  useEffect(() => {
-    if (!isClaiming) return;
-    const t = window.setTimeout(() => {
-      navigate(PATHS.VOUCHER);
-    }, 700);
-
-    return () => window.clearTimeout(t);
-  }, [isClaiming, navigate]);
+  };
 
   return (
-    <div className="grid justify-items-center gap-4 p-4">
-      <div className="flex">
-        <ReelLoop
-          strip={strip}
-          spinning={spinning}
-          stopAtIndex={result[0]}
-          stopSignal={stopSignal}
-          hasSpun={hasSpun}
-          delayMs={0}
-          durationMs={1000}
-          onDone={onDone}
-        />
-        <ReelLoop
-          strip={strip}
-          spinning={spinning}
-          stopAtIndex={result[1]}
-          stopSignal={stopSignal}
-          hasSpun={hasSpun}
-          delayMs={0}
-          durationMs={2000}
-          onDone={onDone}
-        />
-        <ReelLoop
-          strip={strip}
-          spinning={spinning}
-          stopAtIndex={result[2]}
-          delayMs={0}
-          stopSignal={stopSignal}
-          hasSpun={hasSpun}
-          durationMs={3000}
-          onDone={onDone}
-        />
-      </div>
-
-      <button onClick={spin} disabled={isAnimating || isClaiming}>
-        <div className="font-black text-xl text-white text-center mt-19 py-2 px-8">
-          {isClaiming
-            ? "Nhận thưởng.."
-            : isAnimating
-            ? "Đang quay.."
-            : "Bấm ngay"}
+    <div className="grid justify-items-center gap-5 p-3">
+      {loading ? (
+        <div className="grid aspect-square w-full max-w-[340px] place-items-center rounded-full bg-white/80 text-sm text-gray-500">
+          Đang tải vòng quay...
         </div>
+      ) : slots.length < 2 ? (
+        <div className="w-full rounded-2xl bg-white p-5 text-center text-sm text-gray-600">
+          Vòng quay chưa được cấu hình đủ 2 ô. Vui lòng liên hệ quản trị viên.
+        </div>
+      ) : (
+        <WheelGraphic slots={slots} rotation={rotation} spinning={spinning} />
+      )}
+
+      <button
+        type="button"
+        onClick={spin}
+        disabled={
+          spinning || spinUsed || checkingSpin || loading || slots.length < 2
+        }
+        className="rounded-full bg-[#0068FF] px-10 py-3 font-bold text-white shadow-lg disabled:opacity-60"
+      >
+        {spinning
+          ? "Đang quay..."
+          : checkingSpin
+          ? "Đang kiểm tra lượt..."
+          : spinUsed
+          ? "Đã dùng lượt quay"
+          : "QUAY NGAY"}
       </button>
+
+      {spinUsed && !spinning && (
+        <p className="text-center text-sm text-gray-600">
+          Mỗi người chơi chỉ có một lượt quay. Bạn đã sử dụng lượt này.
+        </p>
+      )}
+
+      {outcome && !spinning && (
+        <div className="w-full rounded-2xl bg-white p-4 text-center shadow">
+          <div role="status">
+            <p className="text-sm text-gray-500">
+              Ô số {outcome.slotIndex + 1}
+            </p>
+            <p className="mt-1 text-lg font-bold text-[#0068FF]">
+              {outcome.reward || "Chúc bạn may mắn lần sau!"}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
