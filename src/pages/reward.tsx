@@ -7,7 +7,7 @@ import { openRecruitmentOa } from "@/services/oa";
 import { useState } from "react";
 import { Button, Page, useNavigate, useSnackbar } from "zmp-ui";
 
-const OA_RETURNED_KEY = "zaui-lucky-wheel-oa-returned";
+const OA_RETURNED_KEY = "cusc-zalo-mini-app-oa-returned";
 
 export default function RewardPage() {
   const navigate = useNavigate();

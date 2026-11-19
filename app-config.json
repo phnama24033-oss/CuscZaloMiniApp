@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "zaui-lucky-wheel",
+    "title": "CUSC Zalo Mini App",
     "textColor": {
       "light": "black",
       "dark": "white"
@@ -11,7 +11,7 @@
     "hideAndroidBottomNavigationBar": false
   },
   "template": {
-    "name": "zaui-lucky-wheel"
+    "name": "cusc-zalo-mini-app"
   },
   "listCSS": [],
   "listSyncJS": [],

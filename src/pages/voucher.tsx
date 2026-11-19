@@ -9,7 +9,7 @@ import { Button, Page, useSnackbar } from "zmp-ui";
 
 export default function VoucherPage() {
   const [rewardName] = useState(
-    () => sessionStorage.getItem("zaui-lucky-wheel-latest-prize") || "Voucher may mắn"
+    () => sessionStorage.getItem("cusc-zalo-mini-app-latest-prize") || "Voucher may mắn"
   );
   const [recruitmentOaUrl] = useState(
     () => localStorage.getItem(RECRUITMENT_OA_URL_KEY)

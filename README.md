@@ -8,16 +8,6 @@ CUSC Zalo Mini App là ứng dụng Mini App trên nền tảng Zalo được ph
 
 <img src="./docs/demo.png" alt="CUSC Zalo Mini App Demo" />
 
-# Figma
-
-- Link Figma: [https://www.figma.com/design/Byuy8djfHcsnxousDMFSqL/-Public--Zalo-Mini-App-Templates?node-id=9-22903](https://www.figma.com/design/Byuy8djfHcsnxousDMFSqL/-Public--Zalo-Mini-App-Templates?node-id=9-22903)
-
-# QR Code
-
-<div style="display: flex; justify-content: center;">
-  <img src="./docs/qr.webp" alt="CUSC Mini App QR Code" width="300px" />
-</div>
-
 ## Tính năng chính
 
 - **Landing Page tuyển sinh**: Giới thiệu CUSC, các chương trình đào tạo, thông tin ngành học, hình ảnh hoạt động và các nội dung liên quan đến tuyển sinh.
@@ -100,7 +90,7 @@ Trước khi phát hành, cần triển khai HTTPS, giới hạn `CORS_ORIGINS`,
 ### Sử dụng Zalo Mini App Extension
 
 1. Cài đặt [Visual Studio Code](https://code.visualstudio.com/download) và [Zalo Mini App Extension](https://mini.zalo.me/docs/dev-tools).
-2. Nhấp vào **Create Project** > Chọn template **ZaUI Lucky Wheel** > Đợi khởi tạo dự án.
+2. Nhấp vào **Create Project** hoặc mở thư mục dự án CUSC hiện có trong **Zalo Mini App Extension**.
 3. Cấu hình **App ID** và **Install Dependencies**, sau đó vào bảng **Run** > chọn **Start** để bắt đầu phát triển 🚀
 
 ### Sử dụng Zalo Mini App CLI

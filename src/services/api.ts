@@ -109,9 +109,9 @@ export interface WheelOption {
   isReward: boolean;
 }
 
-const PLAYER_ID_KEY = "zaui-lucky-wheel-player-id";
-const STUDENT_PROFILE_KEY = "zaui-lucky-wheel-student-profile";
-export const RECRUITMENT_OA_URL_KEY = "zaui-lucky-wheel-recruitment-oa";
+const PLAYER_ID_KEY = "cusc-zalo-mini-app-player-id";
+const STUDENT_PROFILE_KEY = "cusc-zalo-mini-app-student-profile";
+export const RECRUITMENT_OA_URL_KEY = "cusc-zalo-mini-app-recruitment-oa";
 const DEFAULT_RECRUITMENT_OA_URL = "https://zalo.me/149986668034000433";
 const LOCAL_DEVELOPMENT_HOSTS = new Set([
   "localhost",
@@ -189,7 +189,7 @@ export const playerApi = {
       RECRUITMENT_OA_URL_KEY,
       result.oaUrl || DEFAULT_RECRUITMENT_OA_URL
     );
-    localStorage.removeItem("zaui-lucky-wheel-school-oa");
+    localStorage.removeItem("cusc-zalo-mini-app-school-oa");
     return result;
   },
 };

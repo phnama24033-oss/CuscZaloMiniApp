@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { downloadFile } from "zmp-sdk/apis";
 import { Page, useNavigate } from "zmp-ui";
 
-const ADMIN_TOKEN_KEY = "zaui-lucky-wheel-admin-token";
+const ADMIN_TOKEN_KEY = "cusc-zalo-mini-app-admin-token";
 const MAX_ZMP_DOWNLOAD_BASE64_LENGTH = 7_000_000;
 type AdminTab = "reports" | "settings";
 

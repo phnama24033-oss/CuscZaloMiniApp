@@ -1,8 +1,8 @@
 {
-  "name": "zaui-lucky-wheel",
+  "name": "cusc-zalo-mini-app",
   "private": true,
   "version": "1.0.0",
-  "description": "ZaUI Lucky Wheel là bộ giao diện mẫu (Template) giúp xây dựng các chiến dịch Vòng quay may mắn (Lucky Wheel/Slot Machine) trên Zalo Mini App nhằm thu hút người dùng và tăng tương tác.",
+  "description": "Ứng dụng Zalo Mini App tuyển sinh và mini game tương tác của Trung tâm Công nghệ Phần mềm Cần Thơ (CUSC).",
   "repository": "",
   "license": "UNLICENSED",
   "browserslist": [

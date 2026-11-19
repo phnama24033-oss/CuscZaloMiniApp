@@ -204,7 +204,7 @@ export default function SlotMachine() {
       return;
     setSpinning(true);
     setOutcome(null);
-    sessionStorage.removeItem("zaui-lucky-wheel-latest-prize");
+    sessionStorage.removeItem("cusc-zalo-mini-app-latest-prize");
 
     try {
       const result = await gameApi.spin();
@@ -224,7 +224,7 @@ export default function SlotMachine() {
       setRotation(currentRotation.current);
       setOutcome(result);
       if (result.reward) {
-        sessionStorage.setItem("zaui-lucky-wheel-latest-prize", result.reward);
+        sessionStorage.setItem("cusc-zalo-mini-app-latest-prize", result.reward);
       }
 
       window.setTimeout(() => setSpinning(false), 5100);
