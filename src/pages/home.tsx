@@ -4,20 +4,46 @@ import { Page, Swiper } from "zmp-ui";
 
 import RegisterForm from "@/components/register-form";
 import GamesPage from "@/pages/games";
-import { profileApi } from "@/services/api";
+import { isZaloTestMode, playerApi, profileApi } from "@/services/api";
+import { userService } from "@/services/user.services";
 import courseScheduleImg from "@/static/cusc-course-schedule.png";
 import trainingBannerImg from "@/static/cusc-training-banner.png";
 import { usePermissionStore } from "@/stores/permission";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function HomePage() {
-  const { check: checkPermission } = usePermissionStore();
+  const { check: checkPermission, hasUserPhoneNumber } =
+    usePermissionStore();
+  const [hasRegistration, setHasRegistration] = useState(
+    () => profileApi.hasRegistration()
+  );
 
   useEffect(() => {
     checkPermission();
   }, []);
 
-  if (profileApi.hasRegistration()) {
+  useEffect(() => {
+    if (hasRegistration || isZaloTestMode()) return;
+
+    if (!hasUserPhoneNumber) return;
+
+    let active = true;
+    userService
+      .getPhoneNumber()
+      .then((phone) => playerApi.loginByPhone(phone))
+      .then(() => {
+        if (active) setHasRegistration(true);
+      })
+      .catch((error) => {
+        console.info("No existing registration was found for the Zalo account:", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hasRegistration, hasUserPhoneNumber]);
+
+  if (hasRegistration) {
     return <GamesPage />;
   }
 

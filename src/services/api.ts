@@ -192,6 +192,19 @@ export const playerApi = {
     localStorage.removeItem("cusc-zalo-mini-app-school-oa");
     return result;
   },
+  async loginByPhone(phone: string) {
+    const result = await apiRequest<{
+      id: number;
+      profile: StudentProfile;
+    }>("/api/players/login-by-phone", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    });
+    localStorage.setItem(PLAYER_ID_KEY, String(result.id));
+    localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(result.profile));
+    sessionStorage.removeItem(STUDENT_PROFILE_KEY);
+    return result;
+  },
 };
 
 export const publicGameApi = {
@@ -247,6 +260,20 @@ function getPlayerId() {
 
 export const profileApi = {
   get: getSavedStudentProfile,
+  async refresh() {
+    const playerId = getPlayerId();
+    if (!playerId) return null;
+    const profile = await apiRequest<StudentProfile>(
+      `/api/players/${encodeURIComponent(playerId)}/profile`
+    );
+    localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(profile));
+    return profile;
+  },
+  clearRegistration() {
+    localStorage.removeItem(PLAYER_ID_KEY);
+    localStorage.removeItem(STUDENT_PROFILE_KEY);
+    sessionStorage.removeItem(STUDENT_PROFILE_KEY);
+  },
   hasRegistration() {
     if (!localStorage.getItem(PLAYER_ID_KEY)) return false;
     try {

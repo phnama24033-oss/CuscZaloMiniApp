@@ -435,6 +435,52 @@ app.get(
   }
 );
 
+app.get(
+  "/api/players/:id/profile",
+  async (req, res, next) => {
+    const studentId = parsePositiveInteger(req.params.id);
+    if (!studentId) {
+      return res.status(400).json({ error: "Mã người chơi không hợp lệ." });
+    }
+
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      const [rows] = await connection.execute(
+        `SELECT s.full_name AS name, s.phone, s.email,
+                s.consented_at AS createdAt, p.name AS province,
+                COALESCE(sc.display_name, s.school_other) AS school,
+                m.name AS major
+         FROM students s
+         JOIN provinces p ON p.id = s.province_id
+         JOIN majors m ON m.id = s.major_id
+         LEFT JOIN schools sc ON sc.id = s.school_id
+         WHERE s.id = ?
+         LIMIT 1`,
+        [studentId]
+      );
+      if (!rows.length) {
+        return res.status(404).json({ error: "Không tìm thấy hồ sơ." });
+      }
+
+      const row = rows[0];
+      res.json({
+        name: row.name,
+        phone: row.phone,
+        email: row.email,
+        province: row.province,
+        school: row.school || "",
+        major: row.major,
+        createdAt: toIsoDate(row.createdAt),
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      connection?.release();
+    }
+  }
+);
+
 app.post(
   "/api/game/puzzle/plays",
   rateLimit({ windowMs: 60_000, max: 20 }),
@@ -662,6 +708,60 @@ app.get(
       );
     } catch (error) {
       next(error);
+    }
+  }
+);
+
+app.post(
+  "/api/players/login-by-phone",
+  rateLimit({ windowMs: 60_000, max: 10 }),
+  async (req, res, next) => {
+    const phone = normalizePhone(
+      typeof req.body?.phone === "string" ? req.body.phone : ""
+    );
+    if (!phone) {
+      return res.status(400).json({ error: "Số điện thoại không hợp lệ." });
+    }
+
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      const [rows] = await connection.execute(
+        `SELECT s.id, s.full_name AS name, s.phone, s.email,
+                s.consented_at AS createdAt, p.name AS province,
+                COALESCE(sc.display_name, s.school_other) AS school,
+                m.name AS major
+         FROM students s
+         JOIN provinces p ON p.id = s.province_id
+         JOIN majors m ON m.id = s.major_id
+         LEFT JOIN schools sc ON sc.id = s.school_id
+         WHERE s.phone = ?
+         LIMIT 1`,
+        [phone]
+      );
+      if (!rows.length) {
+        return res.status(404).json({
+          error: "Chưa tìm thấy tài khoản đăng ký bằng số điện thoại này.",
+        });
+      }
+
+      const row = rows[0];
+      res.json({
+        id: Number(row.id),
+        profile: {
+          name: row.name,
+          phone: row.phone,
+          email: row.email,
+          province: row.province,
+          school: row.school || "",
+          major: row.major,
+          createdAt: toIsoDate(row.createdAt),
+        },
+      });
+    } catch (error) {
+      next(error);
+    } finally {
+      connection?.release();
     }
   }
 );
