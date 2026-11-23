@@ -55,10 +55,12 @@ export interface PuzzlePlay {
   status: PuzzlePlayState;
   startedAt: string;
   completedAt: string | null;
+  retryAt?: string | null;
 }
 
 export interface PuzzleStatus {
   plays: PuzzlePlay[];
+  completedLevels?: PuzzleLevel[];
 }
 
 export interface InterestOption {

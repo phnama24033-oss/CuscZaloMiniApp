@@ -10,7 +10,7 @@ import aptechImage from "@/static/puzzle-aptech.png";
 import arenaImage from "@/static/puzzle-arena.png";
 import ctuImage from "@/static/puzzle-ctu.png";
 import cuscImage from "@/static/puzzle-cusc.png";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Page, useNavigate, useSnackbar } from "zmp-ui";
 
 const LEVELS: Record<
@@ -23,7 +23,7 @@ const LEVELS: Record<
 
 const PUZZLE_IMAGES = [ctuImage, cuscImage, aptechImage, arenaImage];
 
-type Screen = "levels" | "playing" | "success" | "failed";
+type Screen = "levels" | "preparing" | "playing" | "success" | "failed";
 
 function shufflePieces(count: number) {
   const pieces = Array.from({ length: count }, (_, index) => index);
@@ -38,15 +38,29 @@ function shufflePieces(count: number) {
 }
 
 function replacePlay(status: PuzzleStatus, play: PuzzlePlay): PuzzleStatus {
+  const previousCompletedLevels =
+    status.completedLevels ??
+    status.plays
+      .filter((item) => item.status === "completed")
+      .map((item) => item.level);
+  const completedLevels =
+    play.status === "completed" &&
+    !previousCompletedLevels.includes(play.level)
+      ? [...previousCompletedLevels, play.level]
+      : previousCompletedLevels;
   return {
     plays: [...status.plays.filter((item) => item.level !== play.level), play],
+    completedLevels,
   };
 }
 
 export default function PuzzlePage() {
   const navigate = useNavigate();
   const { openSnackbar } = useSnackbar();
-  const [status, setStatus] = useState<PuzzleStatus>({ plays: [] });
+  const [status, setStatus] = useState<PuzzleStatus>({
+    plays: [],
+    completedLevels: [],
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<Screen>("levels");
@@ -57,6 +71,10 @@ export default function PuzzlePage() {
   const [pieces, setPieces] = useState<number[]>([]);
   const [selectedPiece, setSelectedPiece] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(LEVELS[1].seconds);
+  const [preparationSeconds, setPreparationSeconds] = useState(3);
+  const [showSample, setShowSample] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const preparationIdRef = useRef(0);
 
   useEffect(() => {
     if (!profileApi.hasRegistration()) {
@@ -90,35 +108,124 @@ export default function PuzzlePage() {
     };
   }, []);
 
+  useEffect(
+    () => () => {
+      preparationIdRef.current += 1;
+    },
+    []
+  );
+
   useEffect(() => {
     if (screen !== "playing" || !startedAt) return;
+    let expiryReported = false;
 
     const updateTime = () => {
       const elapsed = Math.floor((Date.now() - Date.parse(startedAt)) / 1000);
       const remaining = Math.max(0, LEVELS[level].seconds - elapsed);
       setSecondsLeft(remaining);
-      if (remaining === 0) setScreen("failed");
+      if (remaining === 0) {
+        setScreen("failed");
+        if (!expiryReported) {
+          expiryReported = true;
+          void puzzleApi
+            .status()
+            .then(setStatus)
+            .catch((error) =>
+              openSnackbar({
+                icon: true,
+                type: "error",
+                text:
+                  error instanceof Error
+                    ? error.message
+                    : "Không thể cập nhật trạng thái lượt chơi.",
+                duration: 5000,
+              })
+            );
+        }
+      }
     };
 
     updateTime();
     const interval = window.setInterval(updateTime, 250);
     return () => window.clearInterval(interval);
-  }, [level, screen, startedAt]);
+  }, [level, openSnackbar, screen, startedAt]);
+
+  useEffect(() => {
+    if (screen !== "levels") return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [screen]);
+
+  useEffect(() => {
+    if (screen !== "levels") return;
+    const activePlays = status.plays.filter((play) => play.status === "started");
+    if (!activePlays.length) return;
+
+    const nextExpiration = Math.min(
+      ...activePlays.map(
+        (play) =>
+          Date.parse(play.startedAt) + LEVELS[play.level].seconds * 1000
+      )
+    );
+    const timeout = window.setTimeout(() => {
+      void puzzleApi
+        .status()
+        .then(setStatus)
+        .catch((error) =>
+          openSnackbar({
+            icon: true,
+            type: "error",
+            text:
+              error instanceof Error
+                ? error.message
+                : "Không thể cập nhật trạng thái lượt chơi.",
+            duration: 5000,
+          })
+        );
+    }, Math.max(0, nextExpiration - Date.now()) + 100);
+
+    return () => window.clearTimeout(timeout);
+  }, [openSnackbar, screen, status.plays]);
 
   const startLevel = async (selectedLevel: PuzzleLevel) => {
+    const preparationId = preparationIdRef.current + 1;
+    preparationIdRef.current = preparationId;
     setBusy(true);
+    setLevel(selectedLevel);
+    setImage(PUZZLE_IMAGES[Math.floor(Math.random() * PUZZLE_IMAGES.length)]);
+    setPieces(
+      Array.from(
+        { length: LEVELS[selectedLevel].rows * LEVELS[selectedLevel].columns },
+        (_, index) => index
+      )
+    );
+    setPreparationSeconds(3);
+    setShowSample(false);
+    setScreen("preparing");
+
     try {
+      for (let seconds = 3; seconds > 0; seconds -= 1) {
+        if (preparationId !== preparationIdRef.current) return;
+        setPreparationSeconds(seconds);
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      }
+      if (preparationId !== preparationIdRef.current) return;
+      setPreparationSeconds(0);
+
       const play = await puzzleApi.start(selectedLevel);
+      if (preparationId !== preparationIdRef.current) return;
       setStatus((current) => replacePlay(current, play));
-      setLevel(selectedLevel);
       setPlayId(play.id);
       setStartedAt(play.startedAt);
       setSecondsLeft(LEVELS[selectedLevel].seconds);
-      setImage(PUZZLE_IMAGES[Math.floor(Math.random() * PUZZLE_IMAGES.length)]);
-      setPieces(shufflePieces(LEVELS[selectedLevel].rows * LEVELS[selectedLevel].columns));
+      setPieces(
+        shufflePieces(LEVELS[selectedLevel].rows * LEVELS[selectedLevel].columns)
+      );
       setSelectedPiece(null);
+      setShowSample(false);
       setScreen("playing");
     } catch (error) {
+      if (preparationId !== preparationIdRef.current) return;
       const message =
         error instanceof Error ? error.message : "Không thể bắt đầu trò chơi.";
       openSnackbar({
@@ -135,8 +242,9 @@ export default function PuzzlePage() {
       } catch {
         // Keep the current status visible; the start error is already shown.
       }
+      setScreen("levels");
     } finally {
-      setBusy(false);
+      if (preparationId === preparationIdRef.current) setBusy(false);
     }
   };
 
@@ -197,7 +305,11 @@ export default function PuzzlePage() {
 
   const levelOnePlay = status.plays.find((play) => play.level === 1);
   const levelTwoPlay = status.plays.find((play) => play.level === 2);
-  const levelTwoUnlocked = levelOnePlay?.status === "completed";
+  const levelOneCompleted =
+    status.completedLevels?.includes(1) ?? levelOnePlay?.status === "completed";
+  const levelTwoCompleted =
+    status.completedLevels?.includes(2) ?? levelTwoPlay?.status === "completed";
+  const levelTwoUnlocked = levelOneCompleted;
 
   const showGift = (selectedLevel: PuzzleLevel) => {
     setLevel(selectedLevel);
@@ -205,20 +317,24 @@ export default function PuzzlePage() {
   };
 
   const goToLevels = () => {
+    preparationIdRef.current += 1;
     setScreen("levels");
+    setBusy(false);
     setSelectedPiece(null);
+    setShowSample(false);
   };
 
   return (
     <Page
       hideScrollbar
-      className="min-h-full overflow-y-auto bg-gradient-to-b from-[#EAF3FF] to-white pb-24"
+      className="min-h-screen overflow-y-auto bg-gradient-to-b from-[#EAF3FF] to-white pb-24"
     >
       <main className="mx-auto max-w-lg px-4 pb-8 pt-10">
         <button
           type="button"
           aria-label="Quay lại"
-          className="flex min-h-11 w-11 items-center justify-start text-[#0068FF]"
+          disabled={screen === "preparing" && preparationSeconds === 0}
+          className="flex min-h-11 w-11 items-center justify-start text-[#0068FF] disabled:opacity-50"
           onClick={() =>
             screen === "levels" ? navigate(PATHS.HOME) : goToLevels()
           }
@@ -257,6 +373,8 @@ export default function PuzzlePage() {
               <LevelCard
                 level={1}
                 play={levelOnePlay}
+                hasCompleted={levelOneCompleted}
+                now={now}
                 disabled={busy}
                 onPlay={() => void startLevel(1)}
                 onShowGift={() => showGift(1)}
@@ -264,6 +382,8 @@ export default function PuzzlePage() {
               <LevelCard
                 level={2}
                 play={levelTwoPlay}
+                hasCompleted={levelTwoCompleted}
+                now={now}
                 locked={!levelTwoUnlocked}
                 disabled={busy}
                 onPlay={() => void startLevel(2)}
@@ -273,6 +393,28 @@ export default function PuzzlePage() {
             <p className="mt-4 rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-900">
               Mỗi cấp chỉ có một lượt chơi. Cần hoàn thành cấp 1 để mở cấp 2;
               cấp 2 có hộp quà tượng trưng lớn hơn.
+            </p>
+          </section>
+        ) : screen === "preparing" ? (
+          <section className="mt-8 rounded-3xl bg-white p-6 text-center shadow-lg">
+            <h1 className="text-xl font-black text-[#0755B8]">
+              CHUẨN BỊ CẤP {level}
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Quan sát mẫu ảnh và chuẩn bị ghép hình.
+            </p>
+            <img
+              src={image}
+              alt="Ảnh mẫu để chuẩn bị ghép hình"
+              className="mx-auto mt-5 max-h-72 max-w-full rounded-xl object-contain"
+            />
+            <p
+              className="mt-5 text-lg font-bold text-[#0755B8]"
+              aria-live="polite"
+            >
+              {preparationSeconds > 0
+                ? `Trò chơi bắt đầu sau ${preparationSeconds}s`
+                : "Đang bắt đầu trò chơi..."}
             </p>
           </section>
         ) : screen === "playing" ? (
@@ -305,6 +447,27 @@ export default function PuzzlePage() {
               disabled={busy}
               onPieceClick={handlePieceClick}
             />
+            <button
+              type="button"
+              aria-expanded={showSample}
+              aria-controls="puzzle-sample"
+              className="mt-4 w-full rounded-xl border border-[#0068FF] px-4 py-3 text-sm font-bold text-[#0068FF]"
+              onClick={() => setShowSample((visible) => !visible)}
+            >
+              {showSample ? "ẨN MẪU ẢNH" : "XEM MẪU ẢNH"}
+            </button>
+            {showSample && (
+              <div
+                id="puzzle-sample"
+                className="mt-3 rounded-2xl bg-white p-3 shadow-sm"
+              >
+                <img
+                  src={image}
+                  alt="Ảnh mẫu của bàn ghép hình"
+                  className="mx-auto max-h-80 max-w-full rounded-lg object-contain"
+                />
+              </div>
+            )}
             {busy && (
               <p className="mt-4 text-center text-sm text-gray-600">
                 Đang xác nhận kết quả...
@@ -319,8 +482,8 @@ export default function PuzzlePage() {
               Hết thời gian!
             </h1>
             <p className="mt-2 text-sm leading-6 text-gray-600">
-              Lượt chơi cấp {level} đã được sử dụng. Bạn vẫn có thể chơi cấp 2
-              nếu đã hoàn thành cấp 1.
+              Lượt chơi cấp {level} đã kết thúc. Bạn có thể chơi lại sau 10
+              phút.
             </p>
             <button
               type="button"
@@ -336,9 +499,17 @@ export default function PuzzlePage() {
   );
 }
 
+function formatCooldown(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
 function LevelCard({
   level,
   play,
+  hasCompleted,
+  now,
   locked = false,
   disabled,
   onPlay,
@@ -346,14 +517,21 @@ function LevelCard({
 }: {
   level: PuzzleLevel;
   play: PuzzlePlay | undefined;
+  hasCompleted: boolean;
+  now: number;
   locked?: boolean;
   disabled: boolean;
   onPlay: () => void;
   onShowGift: () => void;
 }) {
   const config = LEVELS[level];
-  const completed = play?.status === "completed";
+  const completed = hasCompleted;
   const used = Boolean(play);
+  const retrySeconds = play?.retryAt
+    ? Math.max(0, Math.ceil((Date.parse(play.retryAt) - now) / 1000))
+    : 0;
+  const coolingDown = retrySeconds > 0;
+  const inProgress = play?.status === "started";
 
   return (
     <article
@@ -386,11 +564,13 @@ function LevelCard({
         >
           {completed
             ? "Hoàn thành"
-            : used
-              ? "Đã sử dụng"
-              : locked
-                ? "Đã khóa"
-                : "Sẵn sàng"}
+            : locked
+              ? "Đã khóa"
+              : inProgress
+                ? "Đang chơi"
+                : play?.status === "failed"
+                  ? "Đã kết thúc"
+                  : "Sẵn sàng"}
         </span>
       </div>
       {locked && (
@@ -400,23 +580,41 @@ function LevelCard({
       )}
       {play?.status === "failed" && (
         <p className="mt-3 text-xs text-red-600">
-          Đã dùng lượt chơi, không thể chơi lại cấp này.
+          {coolingDown
+            ? `Có thể chơi lại sau ${formatCooldown(retrySeconds)}.`
+            : "Bạn có thể chơi lại cấp này."}
+        </p>
+      )}
+      {completed && coolingDown && (
+        <p className="mt-3 text-xs text-amber-700">
+          Có thể chơi lại sau {formatCooldown(retrySeconds)}.
         </p>
       )}
       <button
         type="button"
-        disabled={disabled || locked || (used && !completed)}
+        disabled={disabled || locked || inProgress || coolingDown}
         className="mt-4 w-full rounded-xl bg-[#0068FF] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-        onClick={completed ? onShowGift : onPlay}
+        onClick={onPlay}
       >
-        {completed
-          ? "XEM HỘP QUÀ"
-          : used
-            ? "ĐÃ SỬ DỤNG LƯỢT"
-            : locked
-              ? "CHƯA MỞ KHÓA"
-              : "BẮT ĐẦU CHƠI"}
+        {locked
+          ? "CHƯA MỞ KHÓA"
+          : inProgress
+            ? "ĐANG TRONG LƯỢT CHƠI"
+            : coolingDown
+              ? `CHƠI LẠI SAU ${formatCooldown(retrySeconds)}`
+              : used
+                ? "CHƠI LẠI"
+                : "BẮT ĐẦU CHƠI"}
       </button>
+      {completed && (
+        <button
+          type="button"
+          className="mt-2 w-full rounded-xl border border-[#0068FF] px-4 py-3 text-sm font-bold text-[#0068FF]"
+          onClick={onShowGift}
+        >
+          XEM HỘP QUÀ
+        </button>
+      )}
     </article>
   );
 }
@@ -440,7 +638,7 @@ function PuzzleBoard({
 
   return (
     <div
-      className="grid aspect-square w-full gap-1.5 rounded-2xl bg-blue-100 p-2 shadow-inner"
+      className="grid aspect-square w-full gap-0.5 rounded-2xl bg-blue-100 p-1 shadow-inner"
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       aria-label={`Bàn ghép hình ${rows} nhân ${columns}`}
     >
@@ -458,7 +656,7 @@ function PuzzleBoard({
             disabled={disabled}
             aria-label={`Mảnh ${piece + 1}, vị trí ${position + 1}`}
             aria-pressed={selectedPiece === position}
-            className={`min-h-0 min-w-0 rounded-lg border-2 bg-white bg-no-repeat transition ${
+            className={`min-h-0 min-w-0 rounded-md border bg-white bg-no-repeat transition ${
               selectedPiece === position
                 ? "z-10 scale-95 border-amber-400 ring-4 ring-amber-200"
                 : "border-white"

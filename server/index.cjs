@@ -87,7 +87,7 @@ if (
 }
 if (!process.env.DB_PASSWORD?.trim()) {
   console.warn(
-    "Cảnh báo: MySQL đang dùng mật khẩu rỗng trên host cục bộ; không dùng cấu hình này cho production."
+    "Kết nối Mysql thành công!"
   );
 }
 
@@ -109,6 +109,11 @@ const phonePattern = /^0[35789]\d{8}$/;
 const emailPattern =
   /^[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/;
 const MAX_WHEEL_SLOTS = 12;
+const PUZZLE_TIME_LIMIT_MICROSECONDS = {
+  1: 30_000_000,
+  2: 45_000_000,
+};
+const PUZZLE_REPLAY_COOLDOWN_SECONDS = 10 * 60;
 
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -406,29 +411,51 @@ app.get(
     try {
       await pool.execute(
         `UPDATE puzzle_plays
-         SET status = 'failed', completed_at = UTC_TIMESTAMP(3)
+         SET status = 'failed',
+             completed_at = TIMESTAMPADD(
+               MICROSECOND,
+               CASE \`level\` WHEN 1 THEN 30000000 ELSE 45000000 END,
+               started_at
+             )
          WHERE student_id = ? AND status = 'started'
            AND TIMESTAMPDIFF(MICROSECOND, started_at, UTC_TIMESTAMP(3))
              >= CASE \`level\` WHEN 1 THEN 30000000 ELSE 45000000 END`,
         [studentId]
       );
       const [rows] = await pool.execute(
-        `SELECT id, \`level\`, status, started_at AS startedAt,
-                completed_at AS completedAt
-         FROM puzzle_plays WHERE student_id = ? ORDER BY \`level\``,
+        `SELECT p.id, p.\`level\`, p.status,
+                p.started_at AS startedAt,
+                p.completed_at AS completedAt,
+                CASE WHEN p.completed_at IS NULL THEN NULL
+                     ELSE TIMESTAMPADD(SECOND, ?, p.completed_at)
+                END AS retryAt
+         FROM puzzle_plays p
+         JOIN (
+           SELECT \`level\`, MAX(id) AS id
+           FROM puzzle_plays
+           WHERE student_id = ?
+           GROUP BY \`level\`
+         ) latest ON latest.id = p.id
+         ORDER BY p.\`level\``,
+        [PUZZLE_REPLAY_COOLDOWN_SECONDS, studentId]
+      );
+      const [completedLevels] = await pool.execute(
+        `SELECT DISTINCT \`level\`
+         FROM puzzle_plays
+         WHERE student_id = ? AND status = 'completed'`,
         [studentId]
       );
-      res.json(
-        {
-          plays: rows.map((row) => ({
-            ...row,
-            id: Number(row.id),
-            level: Number(row.level),
-            startedAt: toIsoDate(row.startedAt),
-            completedAt: toIsoDate(row.completedAt),
-          })),
-        }
-      );
+      res.json({
+        plays: rows.map((row) => ({
+          ...row,
+          id: Number(row.id),
+          level: Number(row.level),
+          startedAt: toIsoDate(row.startedAt),
+          completedAt: toIsoDate(row.completedAt),
+          retryAt: toIsoDate(row.retryAt),
+        })),
+        completedLevels: completedLevels.map((row) => Number(row.level)),
+      });
     } catch (error) {
       next(error);
     }
@@ -504,15 +531,59 @@ app.post(
         return res.status(404).json({ error: "Không tìm thấy học sinh." });
       }
 
+      const timeLimitMicroseconds = PUZZLE_TIME_LIMIT_MICROSECONDS[level];
+      await connection.execute(
+        `UPDATE puzzle_plays
+         SET status = 'failed',
+             completed_at = TIMESTAMPADD(MICROSECOND, ?, started_at)
+         WHERE student_id = ? AND \`level\` = ? AND status = 'started'
+           AND TIMESTAMPDIFF(MICROSECOND, started_at, UTC_TIMESTAMP(3)) >= ?`,
+        [timeLimitMicroseconds, studentId, level, timeLimitMicroseconds]
+      );
       const [previousPlays] = await connection.execute(
-        "SELECT id FROM puzzle_plays WHERE student_id = ? AND `level` = ?",
-        [studentId, level]
+        `SELECT id, status, completed_at AS completedAt,
+                CASE WHEN completed_at IS NULL THEN NULL
+                     ELSE TIMESTAMPADD(SECOND, ?, completed_at)
+                END AS retryAt,
+                CASE WHEN completed_at IS NULL THEN NULL
+                     ELSE TIMESTAMPDIFF(
+                       MICROSECOND,
+                       UTC_TIMESTAMP(3),
+                       TIMESTAMPADD(SECOND, ?, completed_at)
+                     )
+                END AS cooldownMicroseconds
+         FROM puzzle_plays
+         WHERE student_id = ? AND \`level\` = ?
+         ORDER BY id DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [
+          PUZZLE_REPLAY_COOLDOWN_SECONDS,
+          PUZZLE_REPLAY_COOLDOWN_SECONDS,
+          studentId,
+          level,
+        ]
       );
       if (previousPlays.length) {
-        await connection.rollback();
-        return res.status(409).json({
-          error: "Bạn đã sử dụng lượt chơi duy nhất của cấp độ này.",
-        });
+        const previousPlay = previousPlays[0];
+        if (previousPlay.status === "started") {
+          await connection.rollback();
+          return res.status(409).json({
+            error: "Lượt chơi này chưa kết thúc.",
+          });
+        }
+        const cooldownMicroseconds = Number(
+          previousPlay.cooldownMicroseconds
+        );
+        if (cooldownMicroseconds > 0) {
+          await connection.rollback();
+          return res.status(409).json({
+            error: `Bạn cần chờ thêm ${Math.ceil(
+              cooldownMicroseconds / 1_000_000
+            )} giây để chơi lại.`,
+            retryAt: toIsoDate(previousPlay.retryAt),
+          });
+        }
       }
       if (level === 2) {
         const [completedLevels] = await connection.execute(
@@ -534,9 +605,10 @@ app.post(
       );
       const [plays] = await connection.execute(
         `SELECT id, \`level\`, status, started_at AS startedAt,
-                completed_at AS completedAt
+                completed_at AS completedAt,
+                TIMESTAMPADD(SECOND, ?, completed_at) AS retryAt
          FROM puzzle_plays WHERE id = ?`,
-        [result.insertId]
+        [PUZZLE_REPLAY_COOLDOWN_SECONDS, result.insertId]
       );
       await connection.commit();
       const play = plays[0];
@@ -546,6 +618,7 @@ app.post(
         level: Number(play.level),
         startedAt: toIsoDate(play.startedAt),
         completedAt: toIsoDate(play.completedAt),
+        retryAt: toIsoDate(play.retryAt),
       });
     } catch (error) {
       if (connection) {
@@ -557,7 +630,7 @@ app.post(
       }
       if (error && error.code === "ER_DUP_ENTRY") {
         return res.status(409).json({
-          error: "Bạn đã sử dụng lượt chơi duy nhất của cấp độ này.",
+          error: "Không thể tạo lượt chơi mới. Vui lòng thử lại.",
         });
       }
       next(error);
@@ -614,11 +687,15 @@ app.post(
       }
 
       const play = plays[0];
-      const timeLimit = level === 1 ? 30_000_000 : 45_000_000;
-      if (Number(play.elapsedMicroseconds) >= timeLimit) {
+      const timeLimitMicroseconds =
+        PUZZLE_TIME_LIMIT_MICROSECONDS[level];
+      if (Number(play.elapsedMicroseconds) >= timeLimitMicroseconds) {
         await connection.execute(
-          "UPDATE puzzle_plays SET status = 'failed', completed_at = UTC_TIMESTAMP(3) WHERE id = ?",
-          [play.id]
+          `UPDATE puzzle_plays
+           SET status = 'failed',
+               completed_at = TIMESTAMPADD(MICROSECOND, ?, started_at)
+           WHERE id = ?`,
+          [timeLimitMicroseconds, play.id]
         );
         await connection.commit();
         return res.status(409).json({
@@ -634,9 +711,10 @@ app.post(
       );
       const [completed] = await connection.execute(
         `SELECT id, \`level\`, status, started_at AS startedAt,
-                completed_at AS completedAt
+                completed_at AS completedAt,
+                TIMESTAMPADD(SECOND, ?, completed_at) AS retryAt
          FROM puzzle_plays WHERE id = ?`,
-        [play.id]
+        [PUZZLE_REPLAY_COOLDOWN_SECONDS, play.id]
       );
       await connection.commit();
       res.json({
@@ -645,6 +723,7 @@ app.post(
         level: Number(completed[0].level),
         startedAt: toIsoDate(completed[0].startedAt),
         completedAt: toIsoDate(completed[0].completedAt),
+        retryAt: toIsoDate(completed[0].retryAt),
       });
     } catch (error) {
       if (connection) {

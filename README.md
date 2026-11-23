@@ -13,7 +13,8 @@ CUSC Zalo Mini App là ứng dụng Mini App trên nền tảng Zalo được ph
 - **Landing Page tuyển sinh**: Giới thiệu CUSC, các chương trình đào tạo, thông tin ngành học, hình ảnh hoạt động và các nội dung liên quan đến tuyển sinh.
 - **Form đăng ký thông tin**: Cho phép người dùng đăng ký thông tin cá nhân như họ tên, số điện thoại, email, ngành học quan tâm và nhu cầu tư vấn.
 - **Xin quyền & Tự động điền (Prefill)**: Hỗ trợ xin quyền truy cập thông tin người dùng và số điện thoại Zalo để tự động điền vào biểu mẫu đăng ký, giúp đơn giản hóa quá trình cung cấp thông tin.
-- **Mini Game tương tác (Lucky Wheel)**: Tích hợp trò chơi vòng quay may mắn nhằm tạo sự hứng thú, tăng mức độ tương tác và thu hút người dùng tham gia các chiến dịch tuyển sinh.
+- **Mini Game tương tác (Vòng quay may mắn)**: Tích hợp trò chơi vòng quay may mắn nhằm tạo sự hứng thú, tăng mức độ tương tác và thu hút người dùng tham gia các chiến dịch tuyển sinh.
+- **Mini Game tương tác (Ghép hình)**: Tích hợp trò chơi ghép nhằm tạo sự hứng thú, tăng mức độ tương tác và thu hút người dùng tham gia các chiến dịch tuyển sinh.
 - **Quản lý thông tin đăng ký**: Lưu trữ thông tin người quan tâm, hỗ trợ quản trị viên theo dõi danh sách đăng ký, thống kê dữ liệu và xuất báo cáo Excel phục vụ công tác tuyển sinh.
 - **Kết nối Zalo OA**: Tích hợp tính năng quan tâm Official Account giúp người dùng dễ dàng kết nối với CUSC để nhận thông tin tuyển sinh, chương trình đào tạo và hỗ trợ tư vấn.
 
@@ -47,7 +48,7 @@ Dự án sử dụng các công nghệ:
 
 Backend sử dụng Node.js `22.9` trở lên và MySQL `8.0.16` trở lên. API không tự tạo bảng; cần nạp schema và dữ liệu nền trước khi chạy.
 
-1. Chạy lần lượt file `01_schema.sql`, `02_seed_data.sql` bạn cung cấp, sau đó chạy các migration `server/migrations/001_school_oa_url.sql`, `server/migrations/002_recruitment_oa_setting.sql` và `server/migrations/003_puzzle_game.sql`. Migration thứ hai tạo cấu hình OA dùng chung và khởi tạo OA CUSC; migration thứ ba tạo bảng lưu lượt chơi xếp hình. Chạy các migration theo thứ tự trên mỗi database.
+1. Chạy lần lượt file `01_schema.sql`, `02_seed_data.sql` bạn cung cấp, sau đó chạy các migration `server/migrations/001_school_oa_url.sql`, `server/migrations/002_recruitment_oa_setting.sql`, `server/migrations/003_puzzle_game.sql` và `server/migrations/004_puzzle_replay_cooldown.sql`. Migration thứ hai tạo cấu hình OA dùng chung và khởi tạo OA CUSC; migration thứ ba tạo bảng lưu lượt chơi xếp hình; migration thứ tư cho phép lưu nhiều lượt chơi để áp dụng thời gian chờ chơi lại 10 phút. Chạy các migration theo thứ tự trên mỗi database.
 
 2. Sao chép các biến cần thiết trong `.env.example` vào `.env` (nếu `.env` đã có thì chỉ bổ sung biến, không ghi đè các thiết lập Mini App hiện có). Cấu hình `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` và `DB_NAME` để trỏ đến MySQL.
 
@@ -175,7 +176,7 @@ Vòng quay SVG được tích hợp như một hoạt động Mini Game nhằm t
 
 Server chịu trách nhiệm tạo kết quả và lưu lượt chơi trong MySQL. Mỗi học sinh chỉ có một lượt cho mỗi game theo khóa duy nhất `(student_id, game_id)`. Có thể tùy chỉnh danh sách phần thưởng; vòng quay hỗ trợ tối đa 12 ô và cần giữ ít nhất 2 ô.
 
-Trò chơi xếp hình có hai cấp: ghép 3 × 3 trong 30 giây và ghép 3 × 4 trong 45 giây. Mỗi cấp chỉ có một lượt chơi; cấp 2 chỉ mở sau khi hoàn thành cấp 1. Lượt chơi và kết quả được lưu ở bảng `puzzle_plays`.
+Trò chơi xếp hình có hai cấp: ghép 3 × 3 trong 30 giây và ghép 3 × 4 trong 45 giây. Sau khi thắng hoặc thua, mỗi cấp có thể chơi lại sau 10 phút; cấp 2 chỉ mở sau khi hoàn thành cấp 1. Lượt chơi và kết quả được lưu ở bảng `puzzle_plays`.
 
 ### 4. Thay đổi tài nguyên (Assets)
 
