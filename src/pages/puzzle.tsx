@@ -483,14 +483,14 @@ export default function PuzzlePage() {
             {showSample && (
               <div
                 id="puzzle-sample"
-                className="pointer-events-none fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-6"
+                className="pointer-events-none fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
               >
-                <div className="w-full max-w-sm rounded-2xl bg-white p-4 text-center shadow-2xl">
+                <div className="w-full max-w-[360px] rounded-2xl bg-white p-4 text-center shadow-2xl">
                   <p className="font-bold text-[#0755B8]">ẢNH MẪU</p>
                   <img
                     src={image}
                     alt="Ảnh mẫu của bàn ghép hình"
-                    className="mx-auto mt-3 max-h-[70vh] max-w-full object-contain"
+                    className="mx-auto mt-3 aspect-[3/4] w-full rounded-lg object-cover"
                   />
                   <p className="mt-3 text-sm text-gray-600">
                     Thả tay để tiếp tục ghép hình
@@ -668,8 +668,11 @@ function PuzzleBoard({
 
   return (
     <div
-      className="grid aspect-square w-full gap-0.5 rounded-2xl bg-blue-100 p-1 shadow-inner"
-      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      className="mx-auto grid aspect-[3/4] w-full max-w-[360px] gap-0.5 rounded-2xl bg-blue-100 p-1 shadow-inner"
+      style={{
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+      }}
       aria-label={`Bàn ghép hình ${rows} nhân ${columns}`}
     >
       {pieces.map((piece, position) => {
