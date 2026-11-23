@@ -113,7 +113,6 @@ const PUZZLE_TIME_LIMIT_MICROSECONDS = {
   1: 30_000_000,
   2: 45_000_000,
 };
-const PUZZLE_REPLAY_COOLDOWN_SECONDS = 10 * 60;
 
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -144,7 +143,7 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
-app.use(express.json({ limit: "16kb", strict: true }));
+app.use(express.json({ limit: "8mb", strict: true }));
 
 const requestTimes = new Map();
 function rateLimit({ windowMs, max }) {
@@ -211,6 +210,51 @@ function normalizeSearch(value) {
 function parsePositiveInteger(value) {
   const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
+async function getPuzzleConfig() {
+  const [settingsRows] = await pool.execute(
+    `SELECT setting_key AS settingKey, setting_value AS settingValue
+     FROM app_settings
+     WHERE setting_key IN ('puzzle_replay_cooldown_seconds', 'puzzle_selected_image_id')`
+  );
+  const settings = Object.fromEntries(
+    settingsRows.map((row) => [row.settingKey, row.settingValue])
+  );
+  const parsedCooldown = Number(settings.puzzle_replay_cooldown_seconds);
+  const cooldownSeconds =
+    Number.isInteger(parsedCooldown) && parsedCooldown >= 0
+      ? parsedCooldown
+      : 600;
+  const selectedImageId = parsePositiveInteger(
+    settings.puzzle_selected_image_id
+  );
+  let imageRows = [];
+  try {
+    [imageRows] = await pool.execute(
+      `SELECT id, name
+       FROM puzzle_images
+       WHERE is_active = 1
+       ORDER BY sort_order, id`
+    );
+  } catch (error) {
+    if (error?.code !== "ER_NO_SUCH_TABLE") throw error;
+  }
+  const images = imageRows.map((row) => ({
+    id: Number(row.id),
+    name: row.name,
+    url: `/api/game/puzzle/images/${Number(row.id)}`,
+  }));
+  const validSelectedImage =
+    selectedImageId &&
+    images.some((image) => image.id === selectedImageId)
+      ? selectedImageId
+      : images[0]?.id || null;
+  return {
+    cooldownSeconds,
+    selectedImageId: validSelectedImage,
+    images,
+  };
 }
 
 function toIsoDate(value) {
@@ -400,6 +444,37 @@ app.get("/api/game/wheel", async (_req, res, next) => {
   }
 });
 
+app.get("/api/game/puzzle/config", async (_req, res, next) => {
+  try {
+    res.json(await getPuzzleConfig());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/game/puzzle/images/:id", async (req, res, next) => {
+  const id = parsePositiveInteger(req.params.id);
+  if (!id) return res.status(404).json({ error: "Không tìm thấy ảnh." });
+  try {
+    const [rows] = await pool.execute(
+      `SELECT image_data AS imageData, mime_type AS mimeType
+       FROM puzzle_images
+       WHERE id = ? AND is_active = 1
+       LIMIT 1`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: "Không tìm thấy ảnh." });
+    const mimeType = /^image\/(png|jpeg|webp)$/.test(rows[0].mimeType)
+      ? rows[0].mimeType
+      : "application/octet-stream";
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(rows[0].imageData);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get(
   "/api/game/puzzle/status",
   rateLimit({ windowMs: 60_000, max: 60 }),
@@ -409,6 +484,8 @@ app.get(
       return res.status(400).json({ error: "Mã học sinh không hợp lệ." });
     }
     try {
+      const puzzleConfig = await getPuzzleConfig();
+      const replayCooldownSeconds = puzzleConfig.cooldownSeconds;
       await pool.execute(
         `UPDATE puzzle_plays
          SET status = 'failed',
@@ -437,7 +514,7 @@ app.get(
            GROUP BY \`level\`
          ) latest ON latest.id = p.id
          ORDER BY p.\`level\``,
-        [PUZZLE_REPLAY_COOLDOWN_SECONDS, studentId]
+        [replayCooldownSeconds, studentId]
       );
       const [completedLevels] = await pool.execute(
         `SELECT DISTINCT \`level\`
@@ -522,6 +599,8 @@ app.post(
     try {
       connection = await pool.getConnection();
       await connection.beginTransaction();
+      const replayConfig = await getPuzzleConfig();
+      const replayCooldownSeconds = replayConfig.cooldownSeconds;
       const [students] = await connection.execute(
         "SELECT id FROM students WHERE id = ? FOR UPDATE",
         [studentId]
@@ -558,8 +637,8 @@ app.post(
          LIMIT 1
          FOR UPDATE`,
         [
-          PUZZLE_REPLAY_COOLDOWN_SECONDS,
-          PUZZLE_REPLAY_COOLDOWN_SECONDS,
+          replayCooldownSeconds,
+          replayCooldownSeconds,
           studentId,
           level,
         ]
@@ -608,7 +687,7 @@ app.post(
                 completed_at AS completedAt,
                 TIMESTAMPADD(SECOND, ?, completed_at) AS retryAt
          FROM puzzle_plays WHERE id = ?`,
-        [PUZZLE_REPLAY_COOLDOWN_SECONDS, result.insertId]
+        [replayCooldownSeconds, result.insertId]
       );
       await connection.commit();
       const play = plays[0];
@@ -664,6 +743,8 @@ app.post(
     try {
       connection = await pool.getConnection();
       await connection.beginTransaction();
+      const replayConfig = await getPuzzleConfig();
+      const replayCooldownSeconds = replayConfig.cooldownSeconds;
       const [students] = await connection.execute(
         "SELECT id FROM students WHERE id = ? FOR UPDATE",
         [studentId]
@@ -714,7 +795,7 @@ app.post(
                 completed_at AS completedAt,
                 TIMESTAMPADD(SECOND, ?, completed_at) AS retryAt
          FROM puzzle_plays WHERE id = ?`,
-        [PUZZLE_REPLAY_COOLDOWN_SECONDS, play.id]
+        [replayCooldownSeconds, play.id]
       );
       await connection.commit();
       res.json({
@@ -1141,6 +1222,122 @@ app.put("/api/admin/oa", requireAdmin, async (req, res, next) => {
       ["recruitment_oa_url", oaUrl]
     );
     res.json({ oaUrl });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/puzzle/config", requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await getPuzzleConfig());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/admin/puzzle/config", requireAdmin, async (req, res, next) => {
+  const cooldownSeconds = Number(req.body?.cooldownSeconds);
+  const selectedImageId = req.body?.selectedImageId;
+  if (
+    !Number.isInteger(cooldownSeconds) ||
+    cooldownSeconds < 0 ||
+    cooldownSeconds > 86400
+  ) {
+    return res.status(400).json({ error: "Thời gian chơi lại không hợp lệ." });
+  }
+  try {
+    await pool.execute(
+      `INSERT INTO app_settings (setting_key, setting_value)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+      ["puzzle_replay_cooldown_seconds", String(cooldownSeconds)]
+    );
+    if (selectedImageId === null) {
+      await pool.execute(
+        "DELETE FROM app_settings WHERE setting_key = 'puzzle_selected_image_id'"
+      );
+    } else {
+      const normalizedSelectedImageId = parsePositiveInteger(selectedImageId);
+      if (!normalizedSelectedImageId) {
+        return res.status(400).json({ error: "Ảnh mẫu không hợp lệ." });
+      }
+      const [images] = await pool.execute(
+        "SELECT id FROM puzzle_images WHERE id = ? AND is_active = 1",
+        [normalizedSelectedImageId]
+      );
+      if (!images.length) {
+        return res.status(400).json({ error: "Ảnh mẫu không tồn tại." });
+      }
+      await pool.execute(
+        `INSERT INTO app_settings (setting_key, setting_value)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+        ["puzzle_selected_image_id", String(normalizedSelectedImageId)]
+      );
+    }
+    res.json(await getPuzzleConfig());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/puzzle/images", requireAdmin, async (req, res, next) => {
+  const name = normalizeText(req.body?.name);
+  const dataUrl = typeof req.body?.dataUrl === "string" ? req.body.dataUrl : "";
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/.exec(
+    dataUrl
+  );
+  if (!name || name.length > 100) {
+    return res.status(400).json({ error: "Tên ảnh không hợp lệ." });
+  }
+  if (!match) {
+    return res.status(400).json({ error: "Chỉ hỗ trợ ảnh PNG, JPG hoặc WEBP." });
+  }
+  try {
+    const buffer = Buffer.from(match[2].replace(/[\r\n]/g, ""), "base64");
+    if (!buffer.length || buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: "Dung lượng ảnh tối đa 5 MB." });
+    }
+    const [countRows] = await pool.execute(
+      "SELECT COUNT(*) AS count FROM puzzle_images WHERE is_active = 1"
+    );
+    const [result] = await pool.execute(
+      `INSERT INTO puzzle_images (name, mime_type, image_data, is_active, sort_order)
+       VALUES (?, ?, ?, 1, ?)`,
+      [name, match[1], buffer, Number(countRows[0].count)]
+    );
+    const config = await getPuzzleConfig();
+    res.status(201).json({
+      id: Number(result.insertId),
+      name,
+      url: `/api/game/puzzle/images/${Number(result.insertId)}`,
+      config,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/puzzle/images/:id", requireAdmin, async (req, res, next) => {
+  const id = parsePositiveInteger(req.params.id);
+  if (!id) return res.status(400).json({ error: "Mã ảnh không hợp lệ." });
+  try {
+    const [result] = await pool.execute(
+      "UPDATE puzzle_images SET is_active = 0 WHERE id = ? AND is_active = 1",
+      [id]
+    );
+    if (!result.affectedRows) {
+      return res.status(404).json({ error: "Không tìm thấy ảnh." });
+    }
+    const [selectedRows] = await pool.execute(
+      "SELECT setting_value AS selectedId FROM app_settings WHERE setting_key = 'puzzle_selected_image_id'"
+    );
+    if (selectedRows[0] && Number(selectedRows[0].selectedId) === id) {
+      await pool.execute(
+        "DELETE FROM app_settings WHERE setting_key = 'puzzle_selected_image_id'"
+      );
+    }
+    res.json({ deleted: true, config: await getPuzzleConfig() });
   } catch (error) {
     next(error);
   }
@@ -1585,6 +1782,7 @@ app.use((error, _req, res, _next) => {
 
 const server = app.listen(port, "0.0.0.0", async () => {
   try {
+    await pool.query("SET GLOBAL max_allowed_packet = 16777216");
     await pool.query("SELECT 1");
     console.log(`MySQL API server listening on port ${port}`);
   } catch (error) {

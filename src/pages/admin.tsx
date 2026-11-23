@@ -7,6 +7,8 @@ import {
   type InterestOption,
   type PlayerRecord,
   type WheelOption,
+  type PuzzleGameConfig,
+  getApiBaseUrl,
 } from "@/services/api";
 import { useEffect, useState } from "react";
 import { downloadFile } from "zmp-sdk/apis";
@@ -88,6 +90,12 @@ export default function AdminPage() {
     type: "interest" | "wheel";
     id: number;
   } | null>(null);
+  const [puzzleConfig, setPuzzleConfig] = useState<PuzzleGameConfig | null>(null);
+  const [puzzleCooldown, setPuzzleCooldown] = useState(600);
+  const [puzzleSelectedImageId, setPuzzleSelectedImageId] = useState<number | null>(null);
+  const [puzzleImageName, setPuzzleImageName] = useState("");
+  const [puzzleImageDataUrl, setPuzzleImageDataUrl] = useState("");
+  const [savingPuzzle, setSavingPuzzle] = useState(false);
 
   async function loadAdminData(
     adminToken: string,
@@ -97,12 +105,13 @@ export default function AdminPage() {
     setLoading(true);
     setError("");
     try {
-      const [nextStats, result, nextInterests, nextWheel, oaConfig] = await Promise.all([
+      const [nextStats, result, nextInterests, nextWheel, oaConfig, nextPuzzle] = await Promise.all([
         adminApi.stats(adminToken),
         adminApi.players(adminToken, requestedPage, search),
         adminApi.interests(adminToken),
         adminApi.wheel(adminToken),
         adminApi.oaConfig(adminToken),
+        adminApi.puzzleConfig(adminToken),
       ]);
       setStats(nextStats);
       setPlayers(result.players);
@@ -111,6 +120,9 @@ export default function AdminPage() {
       setInterests(nextInterests);
       setWheelSlots(nextWheel);
       setOaUrl(oaConfig.oaUrl || "");
+      setPuzzleConfig(nextPuzzle);
+      setPuzzleCooldown(nextPuzzle.cooldownSeconds);
+      setPuzzleSelectedImageId(nextPuzzle.selectedImageId);
       sessionStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
     } catch (requestError) {
       setError(
@@ -284,6 +296,138 @@ export default function AdminPage() {
           ? requestError.message
           : "Không thể lưu ô vòng quay."
       );
+    }
+  }
+
+  async function savePuzzleConfig(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingPuzzle(true);
+    setError("");
+    try {
+      const nextConfig = await adminApi.updatePuzzleConfig(
+        token,
+        puzzleCooldown,
+        puzzleSelectedImageId
+      );
+      setPuzzleConfig(nextConfig);
+      setPuzzleCooldown(nextConfig.cooldownSeconds);
+      setPuzzleSelectedImageId(nextConfig.selectedImageId);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Không thể lưu cấu hình trò chơi xếp hình."
+      );
+    } finally {
+      setSavingPuzzle(false);
+    }
+  }
+
+  function handlePuzzleImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Dung lượng ảnh gốc tối đa 10 MB.");
+      event.target.value = "";
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 720;
+      canvas.height = 960;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        URL.revokeObjectURL(objectUrl);
+        setError("Không thể xử lý ảnh trên thiết bị.");
+        return;
+      }
+      const sourceRatio = image.naturalWidth / image.naturalHeight;
+      const targetRatio = canvas.width / canvas.height;
+      let sourceWidth = image.naturalWidth;
+      let sourceHeight = image.naturalHeight;
+      let sourceX = 0;
+      let sourceY = 0;
+      if (sourceRatio > targetRatio) {
+        sourceWidth = image.naturalHeight * targetRatio;
+        sourceX = (image.naturalWidth - sourceWidth) / 2;
+      } else {
+        sourceHeight = image.naturalWidth / targetRatio;
+        sourceY = (image.naturalHeight - sourceHeight) / 2;
+      }
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+      setPuzzleImageName((current) => current || file.name.replace(/\.[^.]+$/, ""));
+      setPuzzleImageDataUrl(dataUrl);
+      setError("");
+      URL.revokeObjectURL(objectUrl);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setError("File không phải là ảnh hợp lệ.");
+    };
+    image.src = objectUrl;
+  }
+
+  async function uploadPuzzleImage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!puzzleImageDataUrl) {
+      setError("Vui lòng chọn ảnh mới.");
+      return;
+    }
+    setSavingPuzzle(true);
+    setError("");
+    try {
+      const result = await adminApi.uploadPuzzleImage(
+        token,
+        puzzleImageName.trim(),
+        puzzleImageDataUrl
+      );
+      setPuzzleConfig(result.config);
+      setPuzzleCooldown(result.config.cooldownSeconds);
+      setPuzzleSelectedImageId(result.config.selectedImageId);
+      setPuzzleImageName("");
+      setPuzzleImageDataUrl("");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Không thể tải ảnh lên."
+      );
+    } finally {
+      setSavingPuzzle(false);
+    }
+  }
+
+  async function deletePuzzleImage(id: number) {
+    setSavingPuzzle(true);
+    setError("");
+    try {
+      const result = await adminApi.deletePuzzleImage(token, id);
+      setPuzzleConfig(result.config);
+      setPuzzleCooldown(result.config.cooldownSeconds);
+      setPuzzleSelectedImageId(result.config.selectedImageId);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Không thể xóa ảnh."
+      );
+    } finally {
+      setSavingPuzzle(false);
     }
   }
 
@@ -783,9 +927,117 @@ export default function AdminPage() {
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-gray-600">
                   Cấp 1: ghép 3 × 3 trong 30 giây. Cấp 2: ghép 3 × 4 trong 45
-                  giây và chỉ mở sau khi hoàn thành cấp 1. Mỗi cấp có một lượt
-                  chơi.
+                  giây và chỉ mở sau khi hoàn thành cấp 1.
                 </p>
+                <form onSubmit={savePuzzleConfig} className="mt-4 space-y-3">
+                  <label className="block text-xs font-medium text-gray-600">
+                    Thời gian chờ để chơi lại
+                    <select
+                      value={puzzleCooldown}
+                      onChange={(event) =>
+                        setPuzzleCooldown(Number(event.target.value))
+                      }
+                      className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm text-gray-900 outline-none focus:border-[#0068FF]"
+                    >
+                      <option value={0}>Không khóa thời gian</option>
+                      <option value={300}>5 phút</option>
+                      <option value={600}>10 phút</option>
+                      <option value={900}>15 phút</option>
+                      <option value={1800}>30 phút</option>
+                      <option value={3600}>1 giờ</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs font-medium text-gray-600">
+                    Ảnh mặc định
+                    <select
+                      value={puzzleSelectedImageId ?? ""}
+                      onChange={(event) =>
+                        setPuzzleSelectedImageId(
+                          event.target.value ? Number(event.target.value) : null
+                        )
+                      }
+                      className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm text-gray-900 outline-none focus:border-[#0068FF]"
+                      disabled={!puzzleConfig?.images.length}
+                    >
+                      <option value="">Ảnh mẫu ngẫu nhiên</option>
+                      {puzzleConfig?.images.map((image) => (
+                        <option key={image.id} value={image.id}>
+                          {image.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={savingPuzzle || loading}
+                    className="w-full rounded-xl bg-[#0068FF] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {savingPuzzle ? "Đang lưu..." : "Lưu cấu hình xếp hình"}
+                  </button>
+                </form>
+
+                <form onSubmit={uploadPuzzleImage} className="mt-5 rounded-xl border border-gray-100 p-3">
+                  <p className="text-sm font-semibold text-gray-800">Thêm ảnh mới</p>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handlePuzzleImage}
+                    className="mt-2 block w-full text-xs text-gray-600"
+                  />
+                  {puzzleImageDataUrl && (
+                    <img
+                      src={puzzleImageDataUrl}
+                      alt="Xem trước ảnh ghép hình"
+                      className="mt-3 aspect-[3/4] w-full rounded-lg object-cover"
+                    />
+                  )}
+                  <input
+                    value={puzzleImageName}
+                    onChange={(event) => setPuzzleImageName(event.target.value)}
+                    maxLength={100}
+                    placeholder="Tên ảnh"
+                    className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#0068FF]"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingPuzzle || !puzzleImageDataUrl}
+                    className="mt-3 w-full rounded-xl border border-[#0068FF] px-4 py-2 text-sm font-semibold text-[#0068FF] disabled:opacity-50"
+                  >
+                    Thêm ảnh
+                  </button>
+                </form>
+
+                {puzzleConfig?.images.length ? (
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    {puzzleConfig.images.map((image) => (
+                      <div key={image.id} className="overflow-hidden rounded-xl border border-gray-100">
+                        <img
+                          src={`${getApiBaseUrl()}${image.url}`}
+                          alt={image.name}
+                          className="aspect-[3/4] w-full object-cover"
+                        />
+                        <div className="p-2">
+                          <p className="truncate text-xs font-medium text-gray-800">
+                            {image.name}
+                          </p>
+                          <button
+                            type="button"
+                            disabled={savingPuzzle}
+                            onClick={() => void deletePuzzleImage(image.id)}
+                            className="mt-1 text-xs font-medium text-red-600 disabled:text-gray-300"
+                          >
+                            Xóa ảnh
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-xs text-gray-500">
+                    Chưa có ảnh tùy chỉnh. Trò chơi đang dùng 4 ảnh mẫu có sẵn.
+                  </p>
+                )}
               </section>
 
               {pendingDelete && (

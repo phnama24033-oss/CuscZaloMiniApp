@@ -111,6 +111,18 @@ export interface WheelOption {
   isReward: boolean;
 }
 
+export interface PuzzleImageOption {
+  id: number;
+  name: string;
+  url: string;
+}
+
+export interface PuzzleGameConfig {
+  cooldownSeconds: number;
+  selectedImageId: number | null;
+  images: PuzzleImageOption[];
+}
+
 const PLAYER_ID_KEY = "cusc-zalo-mini-app-player-id";
 const STUDENT_PROFILE_KEY = "cusc-zalo-mini-app-student-profile";
 export const RECRUITMENT_OA_URL_KEY = "cusc-zalo-mini-app-recruitment-oa";
@@ -137,7 +149,7 @@ export function isZaloTestMode() {
   );
 }
 
-function getApiBaseUrl() {
+export function getApiBaseUrl() {
   if (isLocalDevelopmentOrigin()) return "http://127.0.0.1:3001";
   const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "");
   if (!baseUrl) {
@@ -314,6 +326,9 @@ export const gameApi = {
 };
 
 export const puzzleApi = {
+  config() {
+    return apiRequest<PuzzleGameConfig>("/api/game/puzzle/config");
+  },
   status() {
     const playerId = getPlayerId();
     if (!playerId) throw new Error("Vui lòng đăng ký tham gia trước khi chơi.");
@@ -447,5 +462,42 @@ export const adminApi = {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
+  },
+  puzzleConfig(token: string) {
+    return apiRequest<PuzzleGameConfig>("/api/admin/puzzle/config", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+  updatePuzzleConfig(
+    token: string,
+    cooldownSeconds: number,
+    selectedImageId: number | null
+  ) {
+    return apiRequest<PuzzleGameConfig>("/api/admin/puzzle/config", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ cooldownSeconds, selectedImageId }),
+    });
+  },
+  uploadPuzzleImage(token: string, name: string, dataUrl: string) {
+    return apiRequest<{
+      id: number;
+      name: string;
+      url: string;
+      config: PuzzleGameConfig;
+    }>("/api/admin/puzzle/images", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, dataUrl }),
+    });
+  },
+  deletePuzzleImage(token: string, id: number) {
+    return apiRequest<{ deleted: boolean; config: PuzzleGameConfig }>(
+      `/api/admin/puzzle/images/${id}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
   },
 };

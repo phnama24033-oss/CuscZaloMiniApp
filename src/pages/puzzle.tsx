@@ -5,6 +5,8 @@ import {
   type PuzzleLevel,
   type PuzzlePlay,
   type PuzzleStatus,
+  type PuzzleGameConfig,
+  getApiBaseUrl,
 } from "@/services/api";
 import aptechImage from "@/static/puzzle-aptech.png";
 import arenaImage from "@/static/puzzle-arena.png";
@@ -74,6 +76,7 @@ export default function PuzzlePage() {
   const [preparationSeconds, setPreparationSeconds] = useState(3);
   const [showSample, setShowSample] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [puzzleConfig, setPuzzleConfig] = useState<PuzzleGameConfig | null>(null);
   const preparationIdRef = useRef(0);
 
   useEffect(() => {
@@ -85,8 +88,20 @@ export default function PuzzlePage() {
     let active = true;
     void (async () => {
       try {
-        const result = await puzzleApi.status();
-        if (active) setStatus(result);
+        const [result, config] = await Promise.all([
+          puzzleApi.status(),
+          puzzleApi.config(),
+        ]);
+        if (active) {
+          setStatus(result);
+          setPuzzleConfig(config);
+          const selectedImage = config.images.find(
+            (item) => item.id === config.selectedImageId
+          );
+          if (selectedImage) {
+            setImage(`${getApiBaseUrl()}${selectedImage.url}`);
+          }
+        }
       } catch (error) {
         if (!active) return;
         openSnackbar({
@@ -192,7 +207,14 @@ export default function PuzzlePage() {
     preparationIdRef.current = preparationId;
     setBusy(true);
     setLevel(selectedLevel);
-    setImage(PUZZLE_IMAGES[Math.floor(Math.random() * PUZZLE_IMAGES.length)]);
+    const selectedImage = puzzleConfig?.images.find(
+      (item) => item.id === puzzleConfig.selectedImageId
+    );
+    setImage(
+      selectedImage
+        ? `${getApiBaseUrl()}${selectedImage.url}`
+        : PUZZLE_IMAGES[Math.floor(Math.random() * PUZZLE_IMAGES.length)]
+    );
     setPieces(
       Array.from(
         { length: LEVELS[selectedLevel].rows * LEVELS[selectedLevel].columns },
