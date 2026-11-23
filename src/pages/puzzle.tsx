@@ -444,28 +444,58 @@ export default function PuzzlePage() {
               image={image}
               pieces={pieces}
               selectedPiece={selectedPiece}
-              disabled={busy}
+              disabled={busy || showSample}
               onPieceClick={handlePieceClick}
             />
             <button
               type="button"
+              disabled={busy}
               aria-expanded={showSample}
               aria-controls="puzzle-sample"
-              className="mt-4 w-full rounded-xl border border-[#0068FF] px-4 py-3 text-sm font-bold text-[#0068FF]"
-              onClick={() => setShowSample((visible) => !visible)}
+              className="mt-4 w-full touch-none select-none rounded-xl border border-[#0068FF] px-4 py-3 text-sm font-bold text-[#0068FF] disabled:opacity-50"
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setShowSample(true);
+              }}
+              onPointerUp={() => setShowSample(false)}
+              onPointerCancel={() => setShowSample(false)}
+              onLostPointerCapture={() => setShowSample(false)}
+              onKeyDown={(event) => {
+                if (event.key === " " || event.key === "Enter") {
+                  event.preventDefault();
+                  setShowSample(true);
+                }
+              }}
+              onKeyUp={(event) => {
+                if (event.key === " " || event.key === "Enter") {
+                  setShowSample(false);
+                }
+              }}
+              onBlur={() => setShowSample(false)}
+              onContextMenu={(event) => event.preventDefault()}
             >
-              {showSample ? "ẨN MẪU ẢNH" : "XEM MẪU ẢNH"}
+              XEM MẪU ẢNH
             </button>
+            <p className="mt-1 text-center text-xs text-gray-500">
+              Nhấn giữ để xem mẫu
+            </p>
             {showSample && (
               <div
                 id="puzzle-sample"
-                className="mt-3 rounded-2xl bg-white p-3 shadow-sm"
+                className="pointer-events-none fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-6"
               >
-                <img
-                  src={image}
-                  alt="Ảnh mẫu của bàn ghép hình"
-                  className="mx-auto max-h-80 max-w-full rounded-lg object-contain"
-                />
+                <div className="w-full max-w-sm rounded-2xl bg-white p-4 text-center shadow-2xl">
+                  <p className="font-bold text-[#0755B8]">ẢNH MẪU</p>
+                  <img
+                    src={image}
+                    alt="Ảnh mẫu của bàn ghép hình"
+                    className="mx-auto mt-3 max-h-[70vh] max-w-full object-contain"
+                  />
+                  <p className="mt-3 text-sm text-gray-600">
+                    Thả tay để tiếp tục ghép hình
+                  </p>
+                </div>
               </div>
             )}
             {busy && (
