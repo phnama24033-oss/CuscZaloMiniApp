@@ -1217,10 +1217,12 @@ export default function AdminPage() {
                   >
                     Trang trước
                   </button>
-                  <span className="text-gray-500">Trang {page}</span>
+                  <span className="text-gray-500">
+                    Trang {page} / {Math.max(1, Math.ceil(total / 10))}
+                  </span>
                   <button
                     type="button"
-                    disabled={page * 20 >= total || loading}
+                    disabled={page * 10 >= total || loading}
                     onClick={() => void loadAdminData(token, page + 1, query)}
                     className="font-medium text-[#0068FF] disabled:text-gray-300"
                   >

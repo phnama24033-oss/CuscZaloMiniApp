@@ -401,7 +401,7 @@ export const adminApi = {
   players(token: string, page: number, query: string) {
     const params = new URLSearchParams({
       page: String(page),
-      limit: "20",
+      limit: "10",
       q: query,
     });
     return apiRequest<PlayerList>(`/api/admin/players?${params}`, {

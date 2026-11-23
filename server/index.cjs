@@ -1560,13 +1560,13 @@ app.get("/api/admin/stats", requireAdmin, async (_req, res, next) => {
 app.get("/api/admin/players", requireAdmin, async (req, res, next) => {
   const query = normalizeText(req.query.q);
   const requestedPage = Number(req.query.page || 1);
-  const requestedLimit = Number(req.query.limit || 20);
+  const requestedLimit = Number(req.query.limit || 10);
   const page =
     Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const limit =
     Number.isSafeInteger(requestedLimit) && requestedLimit > 0
       ? Math.min(requestedLimit, 100)
-      : 20;
+      : 10;
   const offset = (page - 1) * limit;
   const search = `%${query.replace(/[%_\\]/g, "")}%`;
   const where =
