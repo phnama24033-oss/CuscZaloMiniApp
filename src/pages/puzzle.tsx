@@ -349,7 +349,7 @@ export default function PuzzlePage() {
   return (
     <Page
       hideScrollbar
-      className="min-h-screen overflow-y-auto bg-gradient-to-b from-[#EAF3FF] to-white pb-24"
+      className="min-h-screen overflow-y-auto bg-[#F4F8FF] pb-24"
     >
       <main className="mx-auto max-w-lg px-4 pb-8 pt-10">
         <button
@@ -413,31 +413,58 @@ export default function PuzzlePage() {
               />
             </div>
             <p className="mt-4 rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-900">
-              Mỗi cấp chỉ có một lượt chơi. Cần hoàn thành cấp 1 để mở cấp 2;
-              cấp 2 có hộp quà tượng trưng lớn hơn.
+              Mỗi cấp chỉ có một lượt chơi. Hoàn thành cấp 1 để mở cấp 2 với
+              thử thách khó hơn và phần quà hấp dẫn hơn.
             </p>
           </section>
         ) : screen === "preparing" ? (
-          <section className="mt-8 rounded-3xl bg-white p-6 text-center shadow-lg">
-            <h1 className="text-xl font-black text-[#0755B8]">
-              CHUẨN BỊ CẤP {level}
+          <section className="mt-5 rounded-3xl border border-blue-100 bg-white p-5 text-center shadow-md">
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-extrabold tracking-[0.14em] text-[#0755B8]">
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 rounded-full bg-[#0068FF]"
+              />
+              SẴN SÀNG THỬ THÁCH
+            </span>
+            <h1 className="mt-4 text-2xl font-black text-[#0755B8]">
+              Chuẩn bị cấp {level}
             </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Quan sát mẫu ảnh và chuẩn bị ghép hình.
+            <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-gray-600">
+              Quan sát thật kỹ hình mẫu — bạn sẽ cần ghi nhớ để ghép lại
+              chính xác.
             </p>
-            <img
-              src={image}
-              alt="Ảnh mẫu để chuẩn bị ghép hình"
-              className="mx-auto mt-5 max-h-72 max-w-full rounded-xl object-contain"
-            />
-            <p
-              className="mt-5 text-lg font-bold text-[#0755B8]"
-              aria-live="polite"
-            >
-              {preparationSeconds > 0
-                ? `Trò chơi bắt đầu sau ${preparationSeconds}s`
-                : "Đang bắt đầu trò chơi..."}
-            </p>
+
+            <div className="relative mx-auto mt-5 max-w-[240px] rounded-2xl border border-blue-100 bg-blue-50 p-2">
+              <img
+                src={image}
+                alt="Ảnh mẫu để chuẩn bị ghép hình"
+                className="mx-auto max-h-72 max-w-full rounded-xl object-contain"
+              />
+              <span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1 text-[10px] font-extrabold tracking-wider text-[#0755B8] shadow-sm">
+                ẢNH MẪU
+              </span>
+            </div>
+
+            <div className="mx-auto mt-5 flex max-w-[280px] items-center justify-center gap-3 rounded-2xl bg-slate-50 px-3 py-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xl font-black tabular-nums text-[#0755B8]">
+                {preparationSeconds > 0 ? preparationSeconds : "…"}
+              </span>
+              <div className="text-left">
+                <p
+                  className="text-sm font-extrabold text-[#0755B8]"
+                  aria-live="polite"
+                >
+                  {preparationSeconds > 0
+                    ? "Trò chơi sắp bắt đầu"
+                    : "Đang vào trò chơi..."}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {LEVELS[level].rows * LEVELS[level].columns} mảnh ghép
+                  <span aria-hidden="true"> · </span>
+                  {LEVELS[level].seconds} giây
+                </p>
+              </div>
+            </div>
           </section>
         ) : screen === "playing" ? (
           <section>
@@ -737,39 +764,92 @@ function GiftScreen({
   onBack: () => void;
 }) {
   return (
-    <section className="mt-10 rounded-3xl bg-white p-6 text-center shadow-lg">
-      <p className="text-sm font-bold uppercase tracking-widest text-[#0068FF]">
-        Chúc mừng bạn!
-      </p>
-      <h1 className="mt-2 text-2xl font-black text-[#0755B8]">
+    <section className="mt-5 rounded-3xl border border-blue-100 bg-white p-5 text-center shadow-md">
+      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-extrabold tracking-[0.14em] text-emerald-700">
+        <svg
+          aria-hidden="true"
+          className="h-4 w-4"
+          viewBox="0 0 20 20"
+          fill="none"
+        >
+          <path
+            d="m4 10 4 4 8-8"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2.5"
+          />
+        </svg>
+        HOÀN THÀNH THỬ THÁCH
+      </span>
+      <h1 className="mt-4 text-2xl font-black leading-tight text-[#0755B8]">
+        Tuyệt vời!<br />
         Bạn đã hoàn thành cấp {level}
       </h1>
-      <div
-        className="relative mx-auto my-7 h-24 w-28"
-        aria-hidden="true"
-      >
-        <div className="absolute left-1/2 top-1 h-5 w-28 -translate-x-1/2 rounded-md bg-[#8CC8FF]" />
-        <div className="absolute bottom-0 left-2 right-2 top-7 rounded-b-xl bg-[#0068FF]" />
-        <div className="absolute bottom-0 left-1/2 top-7 w-5 -translate-x-1/2 bg-[#DBEAFE]" />
-        <div className="absolute left-1/2 top-0 h-7 w-12 -translate-x-1/2 rounded-full border-[5px] border-[#0068FF]" />
+
+      <div className="relative mx-auto my-5 flex h-36 max-w-[280px] items-center justify-center overflow-hidden rounded-2xl bg-blue-50">
+        <span
+          aria-hidden="true"
+          className="absolute left-8 top-7 h-2 w-2 rounded-full bg-amber-400"
+        />
+        <span
+          aria-hidden="true"
+          className="absolute right-10 top-10 h-3 w-3 rounded-full bg-blue-300"
+        />
+        <span
+          aria-hidden="true"
+          className="absolute bottom-7 left-12 h-2.5 w-2.5 rounded-full bg-sky-400"
+        />
+        <div className="relative h-24 w-28" aria-hidden="true">
+          <div className="absolute left-1/2 top-1 h-5 w-28 -translate-x-1/2 rounded-md bg-[#8CC8FF]" />
+          <div className="absolute bottom-0 left-2 right-2 top-7 rounded-b-xl bg-[#0068FF]" />
+          <div className="absolute bottom-0 left-1/2 top-7 w-5 -translate-x-1/2 bg-[#DBEAFE]" />
+          <div className="absolute left-1/2 top-0 h-7 w-12 -translate-x-1/2 rounded-full border-[5px] border-[#0068FF]" />
+        </div>
       </div>
-      <div className="rounded-2xl bg-amber-50 p-4">
-        <p className="font-extrabold text-amber-900">{LEVELS[level].prize}</p>
-        <p className="mt-1 text-xs leading-5 text-amber-800">
-          Đây là hộp quà tượng trưng cho trò chơi.
+
+      <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+          Phần thưởng của bạn
+        </p>
+        <p className="mt-1 font-extrabold text-amber-950">
+          {LEVELS[level].prize}
         </p>
       </div>
-      {level === 1 && (
+      {level === 1 ? (
+        <div className="mt-4 rounded-2xl bg-blue-50 px-4 py-3 text-left">
+          <p className="text-sm font-bold text-[#0755B8]">
+            Cấp 2 đã được mở khóa!
+          </p>
+          <p className="mt-1 text-xs leading-5 text-blue-800">
+            Sẵn sàng cho thử thách khó hơn và phần quà lớn hơn chưa?
+          </p>
+        </div>
+      ) : (
         <p className="mt-4 text-sm leading-5 text-gray-600">
-          Cấp 2 đã được mở khóa với phần quà lớn hơn. Bạn có thể thử sức ngay!
+          Bạn đã chinh phục tất cả các cấp độ. Cảm ơn bạn đã tham gia!
         </p>
       )}
       <button
         type="button"
-        className="mt-6 w-full rounded-xl bg-[#0068FF] px-4 py-3 font-bold text-white"
+        className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#0068FF] px-4 py-3 font-extrabold text-white shadow-md transition active:scale-[0.98]"
         onClick={onBack}
       >
-        TIẾP TỤC
+        {level === 1 ? "TIẾP TỤC CẤP 2" : "VỀ DANH SÁCH CẤP"}
+        <svg
+          aria-hidden="true"
+          className="h-5 w-5"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <path
+            d="M5 12h14m-6-6 6 6-6 6"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+          />
+        </svg>
       </button>
     </section>
   );
