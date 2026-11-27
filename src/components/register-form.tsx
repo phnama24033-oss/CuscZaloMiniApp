@@ -7,7 +7,6 @@ import {
 import {
   playerApi,
   publicGameApi,
-  isLocalDevelopmentOrigin,
   isZaloTestMode,
   type InterestOption,
   type ProvinceOption,
@@ -43,7 +42,6 @@ export default function RegisterForm() {
     usePermissionStore();
   const { openSnackbar } = useSnackbar();
   const isLocalTestMode = isZaloTestMode();
-  const isLocalDevelopment = isLocalDevelopmentOrigin();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [interests, setInterests] = useState<InterestOption[]>([]);
@@ -307,18 +305,6 @@ export default function RegisterForm() {
       }}
       className="flex flex-col gap-2 p-4"
     >
-      {isLocalTestMode && (
-        <div
-          role="status"
-          className="rounded-lg bg-amber-50 p-3 text-small text-amber-900"
-        >
-          Đang ở chế độ kiểm thử
-          {isLocalDevelopment ? " localhost" : " trên Mini App"}: thông tin
-          tài khoản Zalo không được xác thực. Hồ sơ sẽ được ghi với ID{" "}
-          <code>local-dev:</code>; hãy dùng số điện thoại thử để tránh chiếm số
-          của người đăng ký thật.
-        </div>
-      )}
       <section className="flex flex-col gap-3 rounded-lg bg-white p-4">
         <h2 className="text-sub_title text-text-primary">Thông tin cá nhân</h2>
         <Divider />

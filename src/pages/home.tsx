@@ -6,8 +6,9 @@ import RegisterForm from "@/components/register-form";
 import GamesPage from "@/pages/games";
 import { isZaloTestMode, playerApi, profileApi } from "@/services/api";
 import { userService } from "@/services/user.services";
-import courseScheduleImg from "@/static/cusc-course-schedule.png";
-import trainingBannerImg from "@/static/cusc-training-banner.png";
+import bigBangOfferImg from "@/static/cusc-big-bang-offer.png";
+import courseScheduleImg from "@/static/cusc-course-schedule-2026.png";
+import iotCourseImg from "@/static/cusc-iot-course.png";
 import { usePermissionStore } from "@/stores/permission";
 import { useEffect, useState } from "react";
 
@@ -66,8 +67,15 @@ export default function HomePage() {
             </Swiper.Slide>
             <Swiper.Slide>
               <img
-                src={trainingBannerImg}
-                alt="Chương trình đào tạo lập trình và Arena Multimedia tại CUSC"
+                src={bigBangOfferImg}
+                alt="Ưu đãi học phí CUSC Big Bang"
+                className="block h-auto w-full rounded-2xl"
+              />
+            </Swiper.Slide>
+            <Swiper.Slide>
+              <img
+                src={iotCourseImg}
+                alt="Khóa học thiết kế và xây dựng hệ thống IoT tại CUSC"
                 className="block h-auto w-full rounded-2xl"
               />
             </Swiper.Slide>
