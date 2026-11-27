@@ -95,12 +95,6 @@ export default function PuzzlePage() {
         if (active) {
           setStatus(result);
           setPuzzleConfig(config);
-          const selectedImage = config.images.find(
-            (item) => item.id === config.selectedImageId
-          );
-          if (selectedImage) {
-            setImage(`${getApiBaseUrl()}${selectedImage.url}`);
-          }
         }
       } catch (error) {
         if (!active) return;
@@ -207,14 +201,13 @@ export default function PuzzlePage() {
     preparationIdRef.current = preparationId;
     setBusy(true);
     setLevel(selectedLevel);
-    const selectedImage = puzzleConfig?.images.find(
-      (item) => item.id === puzzleConfig.selectedImageId
-    );
-    setImage(
-      selectedImage
-        ? `${getApiBaseUrl()}${selectedImage.url}`
-        : PUZZLE_IMAGES[Math.floor(Math.random() * PUZZLE_IMAGES.length)]
-    );
+    const availableImages = [
+      ...PUZZLE_IMAGES,
+      ...(puzzleConfig?.images ?? []).map(
+        (item) => `${getApiBaseUrl()}${item.url}`
+      ),
+    ];
+    setImage(availableImages[Math.floor(Math.random() * availableImages.length)]);
     setPieces(
       Array.from(
         { length: LEVELS[selectedLevel].rows * LEVELS[selectedLevel].columns },

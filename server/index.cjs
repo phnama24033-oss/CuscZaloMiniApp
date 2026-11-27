@@ -249,7 +249,7 @@ async function getPuzzleConfig() {
     selectedImageId &&
     images.some((image) => image.id === selectedImageId)
       ? selectedImageId
-      : images[0]?.id || null;
+      : null;
   return {
     cooldownSeconds,
     selectedImageId: validSelectedImage,

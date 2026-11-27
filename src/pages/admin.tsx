@@ -92,7 +92,6 @@ export default function AdminPage() {
   } | null>(null);
   const [puzzleConfig, setPuzzleConfig] = useState<PuzzleGameConfig | null>(null);
   const [puzzleCooldown, setPuzzleCooldown] = useState(600);
-  const [puzzleSelectedImageId, setPuzzleSelectedImageId] = useState<number | null>(null);
   const [puzzleImageName, setPuzzleImageName] = useState("");
   const [puzzleImageDataUrl, setPuzzleImageDataUrl] = useState("");
   const [savingPuzzle, setSavingPuzzle] = useState(false);
@@ -122,7 +121,6 @@ export default function AdminPage() {
       setOaUrl(oaConfig.oaUrl || "");
       setPuzzleConfig(nextPuzzle);
       setPuzzleCooldown(nextPuzzle.cooldownSeconds);
-      setPuzzleSelectedImageId(nextPuzzle.selectedImageId);
       sessionStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
     } catch (requestError) {
       setError(
@@ -307,11 +305,10 @@ export default function AdminPage() {
       const nextConfig = await adminApi.updatePuzzleConfig(
         token,
         puzzleCooldown,
-        puzzleSelectedImageId
+        null
       );
       setPuzzleConfig(nextConfig);
       setPuzzleCooldown(nextConfig.cooldownSeconds);
-      setPuzzleSelectedImageId(nextConfig.selectedImageId);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -398,7 +395,6 @@ export default function AdminPage() {
       );
       setPuzzleConfig(result.config);
       setPuzzleCooldown(result.config.cooldownSeconds);
-      setPuzzleSelectedImageId(result.config.selectedImageId);
       setPuzzleImageName("");
       setPuzzleImageDataUrl("");
     } catch (requestError) {
@@ -419,7 +415,6 @@ export default function AdminPage() {
       const result = await adminApi.deletePuzzleImage(token, id);
       setPuzzleConfig(result.config);
       setPuzzleCooldown(result.config.cooldownSeconds);
-      setPuzzleSelectedImageId(result.config.selectedImageId);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -947,26 +942,9 @@ export default function AdminPage() {
                       <option value={3600}>1 giờ</option>
                     </select>
                   </label>
-                  <label className="block text-xs font-medium text-gray-600">
-                    Ảnh mặc định
-                    <select
-                      value={puzzleSelectedImageId ?? ""}
-                      onChange={(event) =>
-                        setPuzzleSelectedImageId(
-                          event.target.value ? Number(event.target.value) : null
-                        )
-                      }
-                      className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm text-gray-900 outline-none focus:border-[#0068FF]"
-                      disabled={!puzzleConfig?.images.length}
-                    >
-                      <option value="">Ảnh mẫu ngẫu nhiên</option>
-                      {puzzleConfig?.images.map((image) => (
-                        <option key={image.id} value={image.id}>
-                          {image.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <p className="text-xs text-gray-600">
+                    Mỗi lượt chơi chọn ngẫu nhiên từ 4 ảnh mẫu và toàn bộ ảnh đã thêm.
+                  </p>
                   <button
                     type="submit"
                     disabled={savingPuzzle || loading}

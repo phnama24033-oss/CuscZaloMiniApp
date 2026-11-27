@@ -6,7 +6,9 @@ CUSC Zalo Mini App là ứng dụng Mini App trên nền tảng Zalo được ph
 
 # Demo
 
-<img src="./docs/demo.png" alt="CUSC Zalo Mini App Demo" />
+<video src="./docs/demo.mp4" controls preload="metadata" width="540">
+  Your browser does not support video playback.
+</video>
 
 ## Tính năng chính
 
